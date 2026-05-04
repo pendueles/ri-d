@@ -1508,7 +1508,7 @@ function BlockHomeScreen({ block, artistAnswers, onSubcat, onBack, artistName, o
   );
 }
 
-function ArtistHomeScreen({ artistData, artistAnswers, onBlock, onResult, onBack, profile, onCatalogue, onNewProject, onEdit, onPending }) {
+function ArtistHomeScreen({ artistData, artistAnswers, onBlock, onResult, onBack, profile, onCatalogue, onNewProject, onEdit, onPending, onProfile }) {
   const t = theme(isDark());
 
   // Top=Resultado, top-right=DSPs, bot-right=Social,
@@ -1578,201 +1578,136 @@ function ArtistHomeScreen({ artistData, artistAnswers, onBlock, onResult, onBack
         </button>
       </div>
 
-      {/* Three hexagons */}
-      <div style={{flex:1, display:'flex', alignItems:'center', justifyContent:'center', padding:'8px 12px', gap:'8px'}}>
+      {/* Three hexagons — vertical on mobile */}
+      {(() => {
+        const rad = (deg) => deg * Math.PI / 180;
 
-        {/* PERFIL — left, small */}
-        {(() => {
-          const Sv = 130, cxv = Sv/2, cyv = Sv/2, Rv = 44;
-          const hexPts = vertices.map(v => ({ x: cxv + Rv * Math.cos(rad(v.angle)), y: cyv + Rv * Math.sin(rad(v.angle)) }));
+        // Mini hex renderer
+        const MiniHex = ({ title, score, vertices: verts, getScore, onClick, size = 200 }) => {
+          const S = size, cxh = S/2, cyh = S/2, R = S * 0.30;
+          const hexPts = verts.map(v => ({ x: cxh + R * Math.cos(rad(v.angle)), y: cyh + R * Math.sin(rad(v.angle)) }));
           const dataPoly = (() => {
-            const pts = [...vertices].sort((a,b)=>a.angle-b.angle).map(v => {
-              const s = getBlockScore(v.id); if (s===null) return null;
+            const pts = [...verts].sort((a,b)=>a.angle-b.angle).map(v => {
+              const s = getScore(v.id); if (s===null) return null;
               const p = Math.max(0.01, s/100);
-              return { x: cxv + Rv*p*Math.cos(rad(v.angle)), y: cyv + Rv*p*Math.sin(rad(v.angle)) };
+              return { x: cxh + R*p*Math.cos(rad(v.angle)), y: cyh + R*p*Math.sin(rad(v.angle)) };
             }).filter(Boolean);
             if (pts.length<2) return null;
             return pts.map((p,i)=>`${i===0?'M':'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')+' Z';
           })();
-          const artistScore = Math.round(calcTotalScore(ARTIST_BLOCKS, artistAnswers)*10)/10;
-          return (
-            <button onClick={onResult} style={{display:'flex', flexDirection:'column', alignItems:'center', gap:'6px', background:'transparent', border:'none', cursor:'pointer', padding:'4px'}}>
-              <div style={{fontFamily:'Arial,sans-serif', fontSize:'10px', fontWeight:'700', color:t.text3, letterSpacing:'0.1em', textTransform:'uppercase'}}>Perfil</div>
-              <div style={{position:'relative', width:`${Sv}px`, height:`${Sv}px`}}>
-                <svg width={Sv} height={Sv} viewBox={`0 0 ${Sv} ${Sv}`} style={{position:'absolute', inset:0}}>
-                  {[0.33,0.66,1].map((sc,ri) => {
-                    const ps = hexPts.map(p => ({x:cxv+(p.x-cxv)*sc, y:cyv+(p.y-cyv)*sc}));
-                    return <path key={ri} d={ps.map((p,i)=>`${i===0?'M':'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')+' Z'} fill="none" stroke={t.border} strokeWidth="1"/>;
-                  })}
-                  {hexPts.map((p,i) => <line key={i} x1={cxv} y1={cyv} x2={p.x} y2={p.y} stroke={t.border} strokeWidth="1"/>)}
-                  {dataPoly && <path d={dataPoly} fill="rgba(232,21,27,0.15)" stroke="#E8151B" strokeWidth="1.5" strokeLinejoin="round"/>}
-                </svg>
-              </div>
-              {Object.keys(artistAnswers).length > 0 && (
-                <div style={{fontFamily:'Arial,sans-serif', fontSize:'18px', fontWeight:'700', color:scoreColor(artistScore)}}>{artistScore}</div>
-              )}
-            </button>
-          );
-        })()}
 
-        {/* GENERAL — center, large */}
-        {(() => {
-          const artistProjects = _projects.filter(p => p.artistId === artistData?.id);
-          const artistScore = calcTotalScore(ARTIST_BLOCKS, artistAnswers);
-          const projectScores = artistProjects.map(p => {
-            const ans = p.answers || {};
-            return Object.keys(ans).length > 0 ? calcTotalScore(SONG_BLOCKS, ans) : null;
-          }).filter(s => s !== null);
-          const catalogueAvg = projectScores.length > 0 ? projectScores.reduce((a,b)=>a+b,0)/projectScores.length : null;
-          const hasArtist = Object.keys(artistAnswers).length > 0;
-          const generalScore = (() => {
-            if (catalogueAvg !== null && hasArtist) return Math.round((catalogueAvg*0.7 + artistScore*0.3)*10)/10;
-            if (catalogueAvg !== null) return Math.round(catalogueAvg*10)/10;
-            if (hasArtist) return Math.round(artistScore*10)/10;
-            return null;
-          })();
-          const Sg = 180, cxg = Sg/2, cyg = Sg/2, Rg = 64;
-          const hexPts = vertices.map(v => ({ x: cxg + Rg * Math.cos(rad(v.angle)), y: cyg + Rg * Math.sin(rad(v.angle)) }));
-          // Blend artist and catalogue block scores
-          const blendedScore = (blockId) => {
-            if (blockId === 'result') return generalScore;
-            const artistBlock = ARTIST_BLOCKS.find(b => b.id === blockId);
-            const songBlock = SONG_BLOCKS.find(b => b.id === blockId);
-            const aScore = artistBlock ? (() => {
-              const has = artistBlock.subcats.some(s=>s.items.some(i=>artistAnswers[i.id]!==undefined));
-              return has ? calcBlockScore(artistBlock, artistAnswers) : null;
-            })() : null;
-            const cScores = artistProjects.map(p => {
-              const ans = p.answers||{};
-              if (!songBlock) return null;
-              const has = songBlock.subcats.some(s=>s.items.some(i=>ans[i.id]!==undefined));
-              return has ? calcBlockScore(songBlock, ans) : null;
-            }).filter(s=>s!==null);
-            const cAvg = cScores.length>0 ? cScores.reduce((a,b)=>a+b,0)/cScores.length : null;
-            if (cAvg!==null && aScore!==null) return Math.round((cAvg*0.7+aScore*0.3)*10)/10;
-            if (cAvg!==null) return Math.round(cAvg*10)/10;
-            if (aScore!==null) return Math.round(aScore*10)/10;
-            return null;
-          };
-          const dataPoly = (() => {
-            const pts = [...vertices].sort((a,b)=>a.angle-b.angle).map(v => {
-              const s = blendedScore(v.id); if (s===null) return null;
-              const p = Math.max(0.01, s/100);
-              return { x: cxg + Rg*p*Math.cos(rad(v.angle)), y: cyg + Rg*p*Math.sin(rad(v.angle)) };
-            }).filter(Boolean);
-            if (pts.length<2) return null;
-            return pts.map((p,i)=>`${i===0?'M':'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')+' Z';
-          })();
-          return (
-            <div style={{display:'flex', flexDirection:'column', alignItems:'center', gap:'6px', padding:'4px'}}>
-              <div style={{fontFamily:'Arial,sans-serif', fontSize:'10px', fontWeight:'700', color:t.text3, letterSpacing:'0.1em', textTransform:'uppercase'}}>General</div>
-              <div style={{position:'relative', width:`${Sg}px`, height:`${Sg}px`}}>
-                <svg width={Sg} height={Sg} viewBox={`0 0 ${Sg} ${Sg}`} style={{position:'absolute', inset:0}}>
+          const inner = (
+            <div style={{display:'flex', flexDirection:'column', alignItems:'center', gap:'4px', background:'transparent', padding:'4px 8px', cursor: onClick ? 'pointer' : 'default'}}>
+              <div style={{fontFamily:'Arial,sans-serif', fontSize:'11px', fontWeight:'700', color:t.text3, letterSpacing:'0.12em', textTransform:'uppercase'}}>{title}</div>
+              <div style={{position:'relative', width:`${S}px`, height:`${S}px`}}>
+                <svg width={S} height={S} viewBox={`0 0 ${S} ${S}`} style={{position:'absolute', inset:0}}>
                   {[0.33,0.66,1].map((sc,ri) => {
-                    const ps = hexPts.map(p => ({x:cxg+(p.x-cxg)*sc, y:cyg+(p.y-cyg)*sc}));
+                    const ps = hexPts.map(p => ({x:cxh+(p.x-cxh)*sc, y:cyh+(p.y-cyh)*sc}));
                     return <path key={ri} d={ps.map((p,i)=>`${i===0?'M':'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')+' Z'} fill="none" stroke={t.border} strokeWidth="1"/>;
                   })}
-                  {hexPts.map((p,i) => <line key={i} x1={cxg} y1={cyg} x2={p.x} y2={p.y} stroke={t.border} strokeWidth="1"/>)}
-                  {dataPoly && <path d={dataPoly} fill="rgba(232,21,27,0.15)" stroke="#E8151B" strokeWidth="2" strokeLinejoin="round"/>}
+                  {hexPts.map((p,i) => <line key={i} x1={cxh} y1={cyh} x2={p.x.toFixed(1)} y2={p.y.toFixed(1)} stroke={t.border} strokeWidth="1"/>)}
+                  {dataPoly && <path d={dataPoly} fill="rgba(232,21,27,0.12)" stroke="#E8151B" strokeWidth="1.5" strokeLinejoin="round"/>}
                 </svg>
-                {vertices.map(v => {
-                  const s = blendedScore(v.id); if (s===null&&v.id!=='result') return null;
-                  const px = cxg + Rg * Math.cos(rad(v.angle));
-                  const py = cyg + Rg * Math.sin(rad(v.angle));
-                  const isRes = v.id==='result';
+                {/* Vertex labels */}
+                {verts.map(v => {
+                  const s = getScore(v.id);
+                  const px = cxh + R * Math.cos(rad(v.angle));
+                  const py = cyh + R * Math.sin(rad(v.angle));
+                  const isRes = v.id === 'result';
+                  if (isRes) return null; // shown as big number below
                   return (
                     <div key={v.id} style={{position:'absolute', left:`${px}px`, top:`${py}px`, transform:'translate(-50%,-50%)',
-                      background: isRes ? t.accent : s!==null ? t.text : 'transparent',
-                      borderRadius:'16px', padding: isRes ? '4px 10px' : s!==null ? '3px 8px' : '0',
-                      fontFamily:'Arial,sans-serif', fontSize: isRes?'16px':'10px', fontWeight:'700',
-                      color: isRes||s!==null ? '#fff' : t.text3, whiteSpace:'nowrap', pointerEvents:'none'}}>
-                      {isRes ? (generalScore??'–') : s!==null ? s : v.label}
+                      background: s!==null ? t.text : t.bg2,
+                      border:`1px solid ${s!==null ? t.text : t.border}`,
+                      borderRadius:'14px', padding:'3px 7px',
+                      fontFamily:'Arial,sans-serif', pointerEvents:'none', whiteSpace:'nowrap', textAlign:'center'}}>
+                      <div style={{fontSize:'8px', fontWeight:'700', color: s!==null ? t.bg : t.text3, letterSpacing:'0.05em', textTransform:'uppercase'}}>{v.label}</div>
+                      {s!==null && <div style={{fontSize:'10px', fontWeight:'700', color:t.bg, lineHeight:1}}>{s}</div>}
                     </div>
                   );
                 })}
               </div>
-              {generalScore !== null && (
-                <div style={{fontFamily:'Arial,sans-serif', fontSize:'22px', fontWeight:'700', color:scoreColor(generalScore)}}>{generalScore}</div>
+              {score !== null ? (
+                <div style={{fontFamily:'Arial,sans-serif', fontSize:'22px', fontWeight:'700', color:scoreColor(score)}}>{score}</div>
+              ) : (
+                <div style={{fontFamily:'Arial,sans-serif', fontSize:'12px', color:t.text3}}>Sin datos</div>
               )}
             </div>
           );
-        })()}
 
-        {/* CATÁLOGO — right, small */}
-        {(() => {
-          const artistProjects = _projects.filter(p => p.artistId === artistData?.id);
-          const projectScores = artistProjects.map(p => {
-            const ans = p.answers||{};
-            return Object.keys(ans).length>0 ? calcTotalScore(SONG_BLOCKS, ans) : null;
+          return onClick
+            ? <button onClick={onClick} style={{background:'transparent', border:'none', padding:0}}>{inner}</button>
+            : <div>{inner}</div>;
+        };
+
+        // Scores
+        const artistScore = Object.keys(artistAnswers).length > 0 ? Math.round(calcTotalScore(ARTIST_BLOCKS, artistAnswers)*10)/10 : null;
+        const artistProjects = _projects.filter(p => p.artistId === artistData?.id);
+        const projScores = artistProjects.map(p => {
+          const ans = p.answers||{}; return Object.keys(ans).length>0 ? calcTotalScore(SONG_BLOCKS, ans) : null;
+        }).filter(s=>s!==null);
+        const catAvg = projScores.length>0 ? Math.round(projScores.reduce((a,b)=>a+b,0)/projScores.length*10)/10 : null;
+        const generalScore = (() => {
+          if (catAvg!==null && artistScore!==null) return Math.round((catAvg*0.7+artistScore*0.3)*10)/10;
+          if (catAvg!==null) return catAvg;
+          if (artistScore!==null) return artistScore;
+          return null;
+        })();
+
+        // Block score getters
+        const getArtistBlockScore = (id) => {
+          if (id==='result') return artistScore;
+          const b = ARTIST_BLOCKS.find(x=>x.id===id); if (!b) return null;
+          const has = b.subcats.some(s=>s.items.some(i=>artistAnswers[i.id]!==undefined));
+          return has ? Math.round(calcBlockScore(b,artistAnswers)*10)/10 : null;
+        };
+        const getCatBlockScore = (id) => {
+          if (id==='result') return catAvg;
+          const b = SONG_BLOCKS.find(x=>x.id===id); if (!b) return null;
+          const scores = artistProjects.map(p => {
+            const ans=p.answers||{}; const has=b.subcats.some(s=>s.items.some(i=>ans[i.id]!==undefined));
+            return has ? calcBlockScore(b,ans) : null;
           }).filter(s=>s!==null);
-          const catalogueAvg = projectScores.length>0 ? Math.round(projectScores.reduce((a,b)=>a+b,0)/projectScores.length*10)/10 : null;
-          const Sv = 130, cxv = Sv/2, cyv = Sv/2, Rv = 44;
-          // Catalogue block scores (avg across all projects)
-          const getCatBlockScore = (blockId) => {
-            if (blockId==='result') return catalogueAvg;
-            const songBlock = SONG_BLOCKS.find(b=>b.id===blockId);
-            if (!songBlock) return null;
-            const scores = artistProjects.map(p => {
-              const ans = p.answers||{};
-              const has = songBlock.subcats.some(s=>s.items.some(i=>ans[i.id]!==undefined));
-              return has ? calcBlockScore(songBlock, ans) : null;
-            }).filter(s=>s!==null);
-            return scores.length>0 ? Math.round(scores.reduce((a,b)=>a+b,0)/scores.length*10)/10 : null;
-          };
-          const songVertices = [
-            { id:'result', label:'Resultado', angle:-90 },
-            { id:'social', label:'Social', angle:-30 },
-            { id:'ytvideo', label:'Video', angle:30 },
-            { id:'rights', label:'Rights', angle:90 },
-            { id:'authority', label:'Authority', angle:150 },
-            { id:'dsps', label:'DSPs', angle:210 },
-          ];
-          const hexPts = songVertices.map(v => ({ x: cxv + Rv * Math.cos(rad(v.angle)), y: cyv + Rv * Math.sin(rad(v.angle)) }));
-          const dataPoly = (() => {
-            const pts = [...songVertices].sort((a,b)=>a.angle-b.angle).map(v => {
-              const s = getCatBlockScore(v.id); if (s===null) return null;
-              const p = Math.max(0.01, s/100);
-              return { x: cxv + Rv*p*Math.cos(rad(v.angle)), y: cyv + Rv*p*Math.sin(rad(v.angle)) };
-            }).filter(Boolean);
-            if (pts.length<2) return null;
-            return pts.map((p,i)=>`${i===0?'M':'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')+' Z';
-          })();
-          return (
-            <button onClick={onCatalogue} style={{display:'flex', flexDirection:'column', alignItems:'center', gap:'6px', background:'transparent', border:'none', cursor:'pointer', padding:'4px'}}>
-              <div style={{fontFamily:'Arial,sans-serif', fontSize:'10px', fontWeight:'700', color:t.text3, letterSpacing:'0.1em', textTransform:'uppercase'}}>Catálogo</div>
-              <div style={{position:'relative', width:`${Sv}px`, height:`${Sv}px`}}>
-                <svg width={Sv} height={Sv} viewBox={`0 0 ${Sv} ${Sv}`} style={{position:'absolute', inset:0}}>
-                  {[0.33,0.66,1].map((sc,ri) => {
-                    const ps = hexPts.map(p => ({x:cxv+(p.x-cxv)*sc, y:cyv+(p.y-cyv)*sc}));
-                    return <path key={ri} d={ps.map((p,i)=>`${i===0?'M':'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')+' Z'} fill="none" stroke={t.border} strokeWidth="1"/>;
-                  })}
-                  {hexPts.map((p,i) => <line key={i} x1={cxv} y1={cyv} x2={p.x} y2={p.y} stroke={t.border} strokeWidth="1"/>)}
-                  {dataPoly && <path d={dataPoly} fill="rgba(232,21,27,0.15)" stroke="#E8151B" strokeWidth="1.5" strokeLinejoin="round"/>}
-                </svg>
-              </div>
-              {catalogueAvg !== null && (
-                <div style={{fontFamily:'Arial,sans-serif', fontSize:'18px', fontWeight:'700', color:scoreColor(catalogueAvg)}}>{catalogueAvg}</div>
-              )}
-            </button>
-          );
-        })()}
+          return scores.length>0 ? Math.round(scores.reduce((a,c)=>a+c,0)/scores.length*10)/10 : null;
+        };
+        const getGeneralBlockScore = (id) => {
+          if (id==='result') return generalScore;
+          const a = getArtistBlockScore(id); const c = getCatBlockScore(id);
+          if (a!==null && c!==null) return Math.round((c*0.7+a*0.3)*10)/10;
+          if (c!==null) return c; if (a!==null) return a; return null;
+        };
 
-      </div>
+        const artistVerts = [
+          {id:'result',label:'Resultado',angle:-90},{id:'social',label:'Social',angle:-30},
+          {id:'ytvideo',label:'Video',angle:30},{id:'rights',label:'Rights',angle:90},
+          {id:'authority',label:'Authority',angle:150},{id:'dsps',label:'DSPs',angle:210},
+        ];
+        const songVerts = [
+          {id:'result',label:'Resultado',angle:-90},{id:'social',label:'Social',angle:-30},
+          {id:'ytvideo',label:'Video',angle:30},{id:'rights',label:'Rights',angle:90},
+          {id:'authority',label:'Authority',angle:150},{id:'dsps',label:'DSPs',angle:210},
+        ];
+
+        return (
+          <div style={{flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'8px 16px', gap:'16px', overflowY:'auto'}}>
+            {/* General — top, biggest */}
+            <MiniHex title="General" score={generalScore} vertices={artistVerts} getScore={getGeneralBlockScore} size={260}/>
+            {/* Perfil + Catálogo — side by side below */}
+            <div style={{display:'flex', gap:'8px', justifyContent:'center'}}>
+              <MiniHex title="Perfil" score={artistScore} vertices={artistVerts} getScore={getArtistBlockScore} onClick={onProfile} size={170}/>
+              <MiniHex title="Catálogo" score={catAvg} vertices={songVerts} getScore={getCatBlockScore} onClick={onCatalogue} size={170}/>
+            </div>
+          </div>
+        );
+      })()}
+
 
       {/* Action buttons + back */}
       <div style={{padding:'12px 24px', paddingBottom:'max(24px,env(safe-area-inset-bottom,24px))', display:'flex', flexDirection:'column', gap:'10px'}}>
-        <div style={{display:'flex', gap:'10px'}}>
-          <button onClick={onCatalogue}
-            style={{flex:1, padding:'15px', background:t.card, border:`1.5px solid ${t.border}`, borderRadius:'14px', fontFamily:'Arial,sans-serif', fontSize:'15px', fontWeight:'700', color:t.text, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:'8px', boxShadow:`0 2px 8px ${t.shadow}`}}>
-            <span style={{fontSize:'18px'}}>🎵</span> Catálogo
-          </button>
-          {(profile?.type === 'label' || profile?.type === 'admin') && (
-            <button onClick={onNewProject}
-              style={{flex:1, padding:'15px', background:t.accent, border:'none', borderRadius:'14px', fontFamily:'Arial,sans-serif', fontSize:'15px', fontWeight:'700', color:'#fff', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:'8px', boxShadow:`0 2px 8px ${t.shadow}`}}>
-              <span style={{fontSize:'18px'}}>＋</span> Catálogo
-            </button>
-          )}
-        </div>
+        <button onClick={onCatalogue}
+          style={{display:'block', width:'100%', padding:'15px', background:t.card, border:`1.5px solid ${t.border}`, borderRadius:'14px', fontFamily:'Arial,sans-serif', fontSize:'15px', fontWeight:'700', color:t.text, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:'8px', boxShadow:`0 2px 8px ${t.shadow}`}}>
+          <span style={{fontSize:'18px'}}>🎵</span> Catálogo
+        </button>
         <button onClick={onPending}
           style={{display:'block', width:'100%', padding:'15px', background:t.bg2, border:`1.5px solid ${t.border}`, borderRadius:'14px', fontFamily:'Arial,sans-serif', fontSize:'15px', fontWeight:'600', color:t.text, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:'8px'}}>
           <span style={{fontSize:'16px'}}>📋</span> Tareas pendientes
@@ -1783,6 +1718,84 @@ function ArtistHomeScreen({ artistData, artistAnswers, onBlock, onResult, onBack
         </button>
       </div>
 
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════
+// ARTIST PROFILE SCREEN — single hexagon with all 6 blocks
+// ═══════════════════════════════════════════
+function ArtistProfileScreen({ artistData, artistAnswers, onBack, onBlock, onResult }) {
+  const t = theme(isDark());
+  const rad = (deg) => deg * Math.PI / 180;
+  const vertices = [
+    { id:'result',    label:'Resultado', angle: -90 },
+    { id:'social',    label:'Social',    angle: -30 },
+    { id:'ytvideo',   label:'Video',     angle:  30 },
+    { id:'rights',    label:'Rights',    angle:  90 },
+    { id:'authority', label:'Authority', angle: 150 },
+    { id:'dsps',      label:'DSPs',      angle: 210 },
+  ];
+  const getBlockScore = (id) => {
+    if (id === 'result') {
+      const has = ARTIST_BLOCKS.some(b => b.subcats.some(s => s.items.some(i => artistAnswers[i.id] !== undefined)));
+      return has ? Math.round(calcTotalScore(ARTIST_BLOCKS, artistAnswers)*10)/10 : null;
+    }
+    const block = ARTIST_BLOCKS.find(b => b.id === id);
+    if (!block) return null;
+    const has = block.subcats.some(s => s.items.some(i => artistAnswers[i.id] !== undefined));
+    return has ? Math.round(calcBlockScore(block, artistAnswers)*10)/10 : null;
+  };
+  const S = 340, cx = S/2, cy = S/2, R = 120;
+  const hexPoints = vertices.map(v => ({ x: cx + R * Math.cos(rad(v.angle)), y: cy + R * Math.sin(rad(v.angle)) }));
+  const dataPolygon = (() => {
+    const pts = [...vertices].sort((a,b)=>a.angle-b.angle).map(v => {
+      const s = getBlockScore(v.id); if (s===null) return null;
+      const p = Math.max(0.01, s/100);
+      return { x: cx + R*p*Math.cos(rad(v.angle)), y: cy + R*p*Math.sin(rad(v.angle)) };
+    }).filter(Boolean);
+    if (pts.length<2) return null;
+    return pts.map((p,i)=>`${i===0?'M':'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')+' Z';
+  })();
+
+  return (
+    <div style={{minHeight:'100dvh', background:t.bg, display:'flex', flexDirection:'column'}}>
+      <div style={{padding:'16px 20px', paddingTop:'max(16px,env(safe-area-inset-top,16px))', display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:`1px solid ${t.border}`}}>
+        <button onClick={onBack} style={{background:'transparent', border:'none', color:t.text2, fontFamily:'Arial,sans-serif', fontSize:'15px', cursor:'pointer', padding:0}}>← Volver</button>
+        <div style={{fontFamily:'Arial,sans-serif', fontSize:'15px', fontWeight:'700', color:t.text}}>Perfil · {artistData.name}</div>
+        <div style={{width:'60px'}}/>
+      </div>
+      <div style={{flex:1, display:'flex', alignItems:'center', justifyContent:'center', padding:'16px'}}>
+        <div style={{position:'relative', width:`${S}px`, height:`${S}px`}}>
+          <svg width={S} height={S} viewBox={`0 0 ${S} ${S}`} style={{position:'absolute', inset:0, pointerEvents:'none'}}>
+            {[0.33,0.66,1].map((scale,ri) => {
+              const pts = hexPoints.map(p => ({x:cx+(p.x-cx)*scale, y:cy+(p.y-cy)*scale}));
+              return <path key={ri} d={pts.map((p,i)=>`${i===0?'M':'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')+' Z'} fill="none" stroke={t.border} strokeWidth="1"/>;
+            })}
+            {hexPoints.map((p,i) => <line key={i} x1={cx} y1={cy} x2={p.x.toFixed(1)} y2={p.y.toFixed(1)} stroke={t.border} strokeWidth="1"/>)}
+            {dataPolygon && <path d={dataPolygon} fill="rgba(232,21,27,0.15)" stroke="#E8151B" strokeWidth="2" strokeLinejoin="round"/>}
+          </svg>
+          {vertices.map(v => {
+            const px = cx + R * Math.cos(rad(v.angle));
+            const py = cy + R * Math.sin(rad(v.angle));
+            const score = getBlockScore(v.id);
+            const isResult = v.id === 'result';
+            const hasScore = score !== null;
+            return (
+              <button key={v.id} onClick={() => isResult ? onResult() : onBlock(v.id)}
+                style={{position:'absolute', left:`${px}px`, top:`${py}px`, transform:'translate(-50%,-50%)',
+                  display:'flex', flexDirection:'column', alignItems:'center', gap:'2px',
+                  background: isResult ? t.accent : hasScore ? t.text : t.bg,
+                  border:`1.5px solid ${isResult ? t.accent : hasScore ? t.text : t.border}`,
+                  borderRadius:'20px', padding:'6px 12px', cursor:'pointer', minWidth:'62px',
+                  boxShadow: hasScore||isResult ? `0 2px 10px ${t.shadow}` : 'none'}}>
+                {!isResult && <div style={{fontFamily:'Arial,sans-serif', fontSize:'9px', fontWeight:'700', color: hasScore ? t.bg : t.text2, letterSpacing:'0.06em', textTransform:'uppercase', whiteSpace:'nowrap'}}>{v.label}</div>}
+                {(hasScore || isResult) && <div style={{fontFamily:'Arial,sans-serif', fontSize: isResult?'20px':'12px', fontWeight:'700', color: isResult?'#fff':t.bg, lineHeight:1}}>{score}</div>}
+              </button>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
@@ -3041,6 +3054,41 @@ function ArtistCatalogueScreen({ artistData, profile, onBack, onNewProject, onOp
     setEditMode(false);
   };
 
+  // Calculate catalogue block scores (avg across all projects)
+  const rad = (deg) => deg * Math.PI / 180;
+  const songVerts = [
+    {id:'result',label:'Resultado',angle:-90},{id:'social',label:'Social',angle:-30},
+    {id:'ytvideo',label:'Video',angle:30},{id:'rights',label:'Rights',angle:90},
+    {id:'authority',label:'Authority',angle:150},{id:'dsps',label:'DSPs',angle:210},
+  ];
+  const getCatBlockScore = (id) => {
+    const projects = linkedProjects.filter(p => p.answers && Object.keys(p.answers).length > 0);
+    if (projects.length === 0) return null;
+    if (id === 'result') {
+      const scores = projects.map(p => calcTotalScore(SONG_BLOCKS, p.answers));
+      return Math.round(scores.reduce((a,b)=>a+b,0)/scores.length*10)/10;
+    }
+    const block = SONG_BLOCKS.find(b => b.id === id);
+    if (!block) return null;
+    const scores = projects.map(p => {
+      const has = block.subcats.some(s => s.items.some(i => p.answers[i.id] !== undefined));
+      return has ? calcBlockScore(block, p.answers) : null;
+    }).filter(s => s !== null);
+    return scores.length > 0 ? Math.round(scores.reduce((a,b)=>a+b,0)/scores.length*10)/10 : null;
+  };
+  const catAvg = getCatBlockScore('result');
+  const S = 220, cxh = S/2, cyh = S/2, R = S * 0.30;
+  const hexPts = songVerts.map(v => ({x: cxh + R*Math.cos(rad(v.angle)), y: cyh + R*Math.sin(rad(v.angle))}));
+  const catDataPoly = (() => {
+    const pts = [...songVerts].sort((a,b)=>a.angle-b.angle).map(v => {
+      const s = getCatBlockScore(v.id); if (s===null) return null;
+      const p = Math.max(0.01, s/100);
+      return {x: cxh + R*p*Math.cos(rad(v.angle)), y: cyh + R*p*Math.sin(rad(v.angle))};
+    }).filter(Boolean);
+    if (pts.length < 2) return null;
+    return pts.map((p,i)=>`${i===0?'M':'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')+' Z';
+  })();
+
   return (
     <div style={{minHeight:'100dvh', background:t.bg, display:'flex', flexDirection:'column'}}>
       <div style={{padding:'16px 20px', paddingTop:'max(16px,env(safe-area-inset-top,16px))', display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:`1px solid ${t.border}`}}>
@@ -3071,6 +3119,45 @@ function ArtistCatalogueScreen({ artistData, profile, onBack, onNewProject, onOp
           )}
         </div>
       </div>
+
+      {/* Catalogue hexagon — shown when there are projects with answers */}
+      {catAvg !== null && (
+        <div style={{display:'flex', flexDirection:'column', alignItems:'center', padding:'16px 20px 0', borderBottom:`1px solid ${t.border}`}}>
+          <div style={{position:'relative', width:`${S}px`, height:`${S}px`}}>
+            <svg width={S} height={S} viewBox={`0 0 ${S} ${S}`} style={{position:'absolute', inset:0}}>
+              {[0.33,0.66,1].map((sc,ri) => {
+                const ps = hexPts.map(p => ({x:cxh+(p.x-cxh)*sc, y:cyh+(p.y-cyh)*sc}));
+                return <path key={ri} d={ps.map((p,i)=>`${i===0?'M':'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')+' Z'} fill="none" stroke={t.border} strokeWidth="1"/>;
+              })}
+              {hexPts.map((p,i) => <line key={i} x1={cxh} y1={cyh} x2={p.x.toFixed(1)} y2={p.y.toFixed(1)} stroke={t.border} strokeWidth="1"/>)}
+              {catDataPoly && <path d={catDataPoly} fill="rgba(232,21,27,0.12)" stroke="#E8151B" strokeWidth="1.5" strokeLinejoin="round"/>}
+            </svg>
+            {/* Vertex labels */}
+            {songVerts.map(v => {
+              const s = getCatBlockScore(v.id);
+              const px = cxh + R * Math.cos(rad(v.angle));
+              const py = cyh + R * Math.sin(rad(v.angle));
+              const isRes = v.id === 'result';
+              if (isRes) return (
+                <div key={v.id} style={{position:'absolute', left:`${px}px`, top:`${py}px`, transform:'translate(-50%,-50%)',
+                  background:t.accent, borderRadius:'16px', padding:'4px 12px',
+                  fontFamily:'Arial,sans-serif', fontSize:'18px', fontWeight:'700', color:'#fff', pointerEvents:'none'}}>
+                  {s}
+                </div>
+              );
+              return (
+                <div key={v.id} style={{position:'absolute', left:`${px}px`, top:`${py}px`, transform:'translate(-50%,-50%)',
+                  background: s!==null ? t.text : t.bg2, border:`1px solid ${s!==null ? t.text : t.border}`,
+                  borderRadius:'12px', padding:'3px 7px', textAlign:'center', pointerEvents:'none', whiteSpace:'nowrap'}}>
+                  <div style={{fontFamily:'Arial,sans-serif', fontSize:'8px', fontWeight:'700', color: s!==null ? t.bg : t.text3, letterSpacing:'0.05em', textTransform:'uppercase'}}>{v.label}</div>
+                  {s!==null && <div style={{fontFamily:'Arial,sans-serif', fontSize:'10px', fontWeight:'700', color:t.bg, lineHeight:1}}>{s}</div>}
+                </div>
+              );
+            })}
+          </div>
+          <div style={{fontFamily:'Arial,sans-serif', fontSize:'12px', color:t.text3, marginBottom:'12px'}}>{linkedProjects.filter(p=>p.answers&&Object.keys(p.answers).length>0).length} proyectos evaluados</div>
+        </div>
+      )}
 
       <div style={{flex:1, overflowY:'auto', WebkitOverflowScrolling:'touch', padding:'24px 20px'}}>
         {linkedProjects.length === 0 ? (
@@ -4071,11 +4158,30 @@ export default function App() {
         onEdit={() => setPhase("artist-edit")}
         onCatalogue={() => setPhase("artist-catalogue")}
         onPending={() => setPhase("artist-pending")}
+        onProfile={() => setPhase("artist-profile")}
         onNewProject={() => {
           setCurrentSong({ data: { artistName: artistData.name, linkedArtist: artistData }, answers: {} });
           setSongQIdx(0);
           setPhase("song-form");
         }}
+        onBlock={(blockId) => {
+          const idx = ARTIST_BLOCKS.findIndex(b => b.id === blockId);
+          if (idx === -1) return;
+          setCurrentBlockIdx(idx);
+          setPhase("block-home");
+        }}
+      />
+    );
+  }
+
+  // ARTIST PROFILE — single hexagon with all 6 blocks
+  if (phase === "artist-profile") {
+    return (
+      <ArtistProfileScreen
+        artistData={artistData}
+        artistAnswers={artistAnswers}
+        onBack={() => setPhase("artist-home")}
+        onResult={() => setPhase("artist-result")}
         onBlock={(blockId) => {
           const idx = ARTIST_BLOCKS.findIndex(b => b.id === blockId);
           if (idx === -1) return;
