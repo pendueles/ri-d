@@ -693,7 +693,7 @@ function bgColor(progress) {
 import { initializeApp } from "firebase/app";
 import {
   getFirestore, doc, getDoc, setDoc, collection,
-  getDocs, writeBatch
+  getDocs, onSnapshot, writeBatch
 } from "firebase/firestore";
 
 const firebaseConfig = {
@@ -708,7 +708,7 @@ const firebaseConfig = {
 const firebaseApp = initializeApp(firebaseConfig);
 const db = getFirestore(firebaseApp);
 
-// ── Session state (local only — UI state) ──
+// ── Session state (local only — UI navigation state) ──
 const STORAGE_KEY = "tool_pwa_v1";
 function saveState(state) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch(e){}
@@ -720,83 +720,130 @@ function clearState() {
   try { localStorage.removeItem(STORAGE_KEY); } catch(e){}
 }
 
-// ── Artists (Firestore + local cache) ──
-function getArtists() {
-  try { const s = localStorage.getItem("artists_cache"); return s ? JSON.parse(s) : []; } catch(e){ return []; }
-}
-async function saveArtistsAsync(artists) {
+// ── In-memory store — Firebase is single source of truth ──
+// All reads come from this store, all writes go to Firestore
+let _artists = [];
+let _labelUsers = {};
+let _artistUsers = {};
+let _mgmtUsers = {};
+let _listeners = [];
+
+function notifyListeners() { _listeners.forEach(fn => fn()); }
+function subscribeStore(fn) { _listeners.push(fn); return () => { _listeners = _listeners.filter(f => f !== fn); }; }
+
+// ── Artists ──
+function getArtists() { return _artists; }
+
+async function saveArtists(artists) {
+  _artists = artists;
+  notifyListeners();
   try {
+    // Get current Firestore artists to find deleted ones
+    const snap = await getDocs(collection(db, "artists"));
     const batch = writeBatch(db);
-    // Delete removed artists
-    const existing = await getDocs(collection(db, "artists"));
-    existing.docs.forEach(d => {
+    // Delete artists that are no longer in the list
+    snap.docs.forEach(d => {
       if (!artists.find(a => a.id === d.id)) batch.delete(d.ref);
     });
+    // Upsert all current artists
     artists.forEach(a => {
-      const ref = doc(db, "artists", a.id || Date.now().toString());
+      const ref = doc(db, "artists", a.id);
       batch.set(ref, a);
     });
     await batch.commit();
-    localStorage.setItem("artists_cache", JSON.stringify(artists));
-  } catch(e) { localStorage.setItem("artists_cache", JSON.stringify(artists)); }
+  } catch(e) { console.warn("saveArtists failed", e); }
 }
-function saveArtists(artists) {
-  localStorage.setItem("artists_cache", JSON.stringify(artists));
-  saveArtistsAsync(artists).catch(() => {});
+
+// Save a single artist (more efficient than saving all)
+async function saveOneArtist(artist) {
+  _artists = _artists.map(a => a.id === artist.id ? artist : a);
+  if (!_artists.find(a => a.id === artist.id)) _artists.push(artist);
+  notifyListeners();
+  try {
+    await setDoc(doc(db, "artists", artist.id), artist);
+  } catch(e) { console.warn("saveOneArtist failed", e); }
+}
+
+async function deleteArtists(ids) {
+  _artists = _artists.filter(a => !ids.includes(a.id));
+  notifyListeners();
+  try {
+    const batch = writeBatch(db);
+    ids.forEach(id => batch.delete(doc(db, "artists", id)));
+    await batch.commit();
+  } catch(e) { console.warn("deleteArtists failed", e); }
 }
 
 // ── Artist users ──
 const ARTIST_USERS_KEY = "tool_artist_users_v1";
-function getArtistUsers() {
-  try { const s = localStorage.getItem(ARTIST_USERS_KEY); return s ? JSON.parse(s) : {}; } catch(e) { return {}; }
-}
-function saveArtistUsers(users) {
-  try { localStorage.setItem(ARTIST_USERS_KEY, JSON.stringify(users)); } catch(e) {}
-  setDoc(doc(db, "config", "artistUsers"), users).catch(() => {});
+function getArtistUsers() { return _artistUsers; }
+async function saveArtistUsers(users) {
+  _artistUsers = users;
+  try {
+    localStorage.setItem(ARTIST_USERS_KEY, JSON.stringify(users));
+    await setDoc(doc(db, "config", "artistUsers"), users);
+  } catch(e) {}
 }
 function registerArtistUser(name) {
-  const users = getArtistUsers();
-  users[name.trim()] = true;
+  const users = { ..._artistUsers, [name.trim()]: true };
   saveArtistUsers(users);
 }
 
 // ── Label users ──
 const DEFAULT_LABEL_USERS = { 'Mara': true, 'Fer': true, 'Cueto': true };
 const LABEL_USERS_KEY = "tool_label_users_v1";
-function getLabelUsers() {
+function getLabelUsers() { return { ...DEFAULT_LABEL_USERS, ..._labelUsers }; }
+async function saveLabelUsers(users) {
+  _labelUsers = { ...DEFAULT_LABEL_USERS, ...users };
+  notifyListeners();
   try {
-    const s = localStorage.getItem(LABEL_USERS_KEY);
-    const stored = s ? JSON.parse(s) : {};
-    return { ...DEFAULT_LABEL_USERS, ...stored };
-  } catch(e) { return DEFAULT_LABEL_USERS; }
-}
-function saveLabelUsers(users) {
-  try { localStorage.setItem(LABEL_USERS_KEY, JSON.stringify({ ...DEFAULT_LABEL_USERS, ...users })); } catch(e) {}
-  setDoc(doc(db, "config", "labelUsers"), { ...DEFAULT_LABEL_USERS, ...users }).catch(() => {});
+    localStorage.setItem(LABEL_USERS_KEY, JSON.stringify(_labelUsers));
+    await setDoc(doc(db, "config", "labelUsers"), _labelUsers);
+  } catch(e) {}
 }
 
 // ── Mgmt users ──
-function getMgmtUsers() {
-  try { return JSON.parse(localStorage.getItem("tool_mgmt_users_v1") || "{}"); } catch(e) { return {}; }
-}
-function saveMgmtUsers(users) {
-  try { saveMgmtUsers(users); } catch(e) {}
-  setDoc(doc(db, "config", "mgmtUsers"), users).catch(() => {});
+function getMgmtUsers() { return _mgmtUsers; }
+async function saveMgmtUsers(users) {
+  _mgmtUsers = users;
+  try {
+    localStorage.setItem("tool_mgmt_users_v1", JSON.stringify(users));
+    await setDoc(doc(db, "config", "mgmtUsers"), users);
+  } catch(e) {}
 }
 
-// ── Sync from Firestore on load ──
-async function syncFromFirestore() {
-  try {
-    const snap = await getDocs(collection(db, "artists"));
-    const artists = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    if (artists.length > 0) localStorage.setItem("artists_cache", JSON.stringify(artists));
-    const luSnap = await getDoc(doc(db, "config", "labelUsers"));
-    if (luSnap.exists()) localStorage.setItem(LABEL_USERS_KEY, JSON.stringify(luSnap.data()));
-    const auSnap = await getDoc(doc(db, "config", "artistUsers"));
-    if (auSnap.exists()) localStorage.setItem(ARTIST_USERS_KEY, JSON.stringify(auSnap.data()));
-    const mgmtSnap = await getDoc(doc(db, "config", "mgmtUsers"));
-    if (mgmtSnap.exists()) localStorage.setItem("tool_mgmt_users_v1", JSON.stringify(mgmtSnap.data()));
-  } catch(e) { console.warn("Firestore sync failed, using local cache", e); }
+// ── Real-time listeners — subscribe to all Firestore changes ──
+function startRealtimeSync(onReady) {
+  let artistsReady = false, configReady = false;
+  const checkReady = () => { if (artistsReady && configReady) onReady(); };
+
+  // Artists — real-time
+  const unsubArtists = onSnapshot(collection(db, "artists"), snap => {
+    _artists = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    notifyListeners();
+    if (!artistsReady) { artistsReady = true; checkReady(); }
+  }, err => {
+    console.warn("Artists snapshot error", err);
+    if (!artistsReady) { artistsReady = true; checkReady(); }
+  });
+
+  // Config docs — real-time
+  const unsubConfig = onSnapshot(doc(db, "config", "labelUsers"), snap => {
+    if (snap.exists()) { _labelUsers = snap.data(); notifyListeners(); }
+    if (!configReady) { configReady = true; checkReady(); }
+  }, err => {
+    console.warn("Config snapshot error", err);
+    if (!configReady) { configReady = true; checkReady(); }
+  });
+
+  onSnapshot(doc(db, "config", "artistUsers"), snap => {
+    if (snap.exists()) _artistUsers = snap.data();
+  });
+  onSnapshot(doc(db, "config", "mgmtUsers"), snap => {
+    if (snap.exists()) _mgmtUsers = snap.data();
+  });
+
+  return () => { unsubArtists(); unsubConfig(); };
 }
 
 // ═══════════════════════════════════════════
@@ -1695,8 +1742,7 @@ function ArtistListScreen({ profile, onBack, onSelect, onCreate }) {
   );
 
   const handleDelete = () => {
-    const remaining = allArtists.filter(a => !selected.includes(a.id));
-    saveArtists(remaining);
+    deleteArtists(selected);
     setSelected([]);
     setEditMode(false);
   };
@@ -1718,14 +1764,8 @@ function ArtistListScreen({ profile, onBack, onSelect, onCreate }) {
       managers.forEach(m => { existing[m] = true; });
       saveMgmtUsers(existing);
     } catch(e) {}
-    const updated = allArtists.map(a =>
-      a.id === editingManagement.id ? {
-        ...a,
-        management: managers.join('; '),
-        labelUsers: extraLabelUsers, // array of label co-owners
-      } : a
-    );
-    saveArtists(updated);
+    const updated = { ...editingManagement, management: managers.join('; '), labelUsers: extraLabelUsers };
+    saveOneArtist(updated);
     setEditingManagement(null);
     setMgmtInput('');
   };
@@ -2574,12 +2614,10 @@ function ArtistCatalogueScreen({ artistData, profile, onBack, onNewProject, onOp
   );
 
   const handleDelete = () => {
-    const all = getArtists();
-    const updated = all.map(a => {
-      if (a.id !== artistData.id) return a;
-      return { ...a, projects: (a.projects || []).filter(p => !selected.includes(p.id)) };
-    });
-    saveArtists(updated);
+    const target = getArtists().find(a => a.id === artistData.id);
+    if (target) {
+      saveOneArtist({ ...target, projects: (target.projects || []).filter(p => !selected.includes(p.id)) });
+    }
     setSelected([]);
     setEditMode(false);
   };
@@ -2914,9 +2952,7 @@ function ArtistEditScreen({ artistData, onBack, onSave }) {
       labelUsers: selectedLabels,
       labelUser: selectedLabels[0] || artistData.labelUser,
     };
-    const all = getArtists();
-    const saved = all.map(a => a.id === artistData.id ? updated : a);
-    saveArtists(saved);
+    saveOneArtist(updated);
     onSave(updated);
   };
 
@@ -3013,15 +3049,22 @@ export default function App() {
 
   const [hasSaved, setHasSaved] = useState(false);
   const [syncing, setSyncing] = useState(true);
+  // Force re-render when Firebase data changes
+  const [, forceUpdate] = useState(0);
+  useEffect(() => {
+    const unsub = subscribeStore(() => forceUpdate(n => n + 1));
+    return unsub;
+  }, []);
 
   useEffect(() => {
-    syncFromFirestore().finally(() => {
+    const unsub = startRealtimeSync(() => {
       setSyncing(false);
       const saved = loadState();
       if (saved && saved.phase && saved.phase !== "welcome") {
         setHasSaved(true);
       }
     });
+    return unsub;
   }, []);
 
   function resumeSaved() {
@@ -3091,6 +3134,11 @@ export default function App() {
     }
     const newAnswers = { ...artistAnswers, [id]: val };
     setArtistAnswers(newAnswers);
+    // Persist answers to Firebase
+    if (artistData?.id) {
+      const target = getArtists().find(a => a.id === artistData.id);
+      if (target) saveOneArtist({ ...target, answers: newAnswers });
+    }
     const next = artistQIdx + 1;
     // Check if this was the last question of a subcat
     const subcatEndInfo = ARTIST_SUBCAT_ENDS.find(e => e.endIdx === artistQIdx);
@@ -3143,14 +3191,12 @@ export default function App() {
     const targetId = projectData?.linkedArtist?.id || artistData?.id;
     if (!targetId || !projectData?.id) return;
     const allArtists = getArtists();
-    const updated = allArtists.map(a => {
-      if (a.id !== targetId) return a;
-      const projects = (a.projects || []).map(p =>
-        p.id === projectData.id ? { ...p, answers, ...(score !== undefined ? { score } : {}) } : p
-      );
-      return { ...a, projects };
-    });
-    saveArtists(updated);
+    const target = allArtists.find(a => a.id === targetId);
+    if (!target) return;
+    const projects = (target.projects || []).map(p =>
+      p.id === projectData.id ? { ...p, answers, ...(score !== undefined ? { score } : {}) } : p
+    );
+    saveOneArtist({ ...target, projects });
   }
 
   function finishCurrentSong(answers) {
@@ -3183,7 +3229,7 @@ export default function App() {
       const found = artists.find(a => a.name && a.name.toLowerCase() === p.name.toLowerCase());
       if (found) {
         setArtistData(found);
-        setArtistAnswers({});
+        setArtistAnswers(found.answers || {});
         setArtistQIdx(0);
         setCurrentBlockIdx(0);
         setPhase("artist-home");
@@ -3263,7 +3309,7 @@ export default function App() {
       onBack={() => setPhase("welcome")}
       onSelectArtist={(artist) => {
         setArtistData(artist);
-        setArtistAnswers({});
+        setArtistAnswers(artist.answers || {});
         setArtistQIdx(0);
         setCurrentBlockIdx(0);
         setPhase("artist-home");
@@ -3304,7 +3350,7 @@ export default function App() {
         onBack={() => setPhase("welcome")}
         onSelect={(artist) => {
           setArtistData(artist);
-          setArtistAnswers({});
+          setArtistAnswers(artist.answers || {});
           setArtistQIdx(0);
           setCurrentBlockIdx(0);
           setPhase("artist-home");
@@ -3320,8 +3366,7 @@ export default function App() {
       profile={profile}
       onBack={() => setPhase("artist-list")}
       onSave={(artistWithMeta) => {
-        const existing = getArtists();
-        saveArtists([...existing, artistWithMeta]);
+        saveOneArtist(artistWithMeta);
         setArtistData(artistWithMeta);
         setArtistAnswers({});
         setArtistQIdx(0);
@@ -3577,13 +3622,8 @@ export default function App() {
         const projectId = Date.now().toString();
         const projectEntry = { ...data, id: projectId, answers: {}, createdAt: new Date().toISOString() };
         if (targetArtist?.id) {
-          const allArtists = getArtists();
-          const updated = allArtists.map(a =>
-            a.id === targetArtist.id
-              ? { ...a, projects: [...(a.projects || []), projectEntry] }
-              : a
-          );
-          saveArtists(updated);
+          const target = getArtists().find(a => a.id === targetArtist.id);
+          if (target) saveOneArtist({ ...target, projects: [...(target.projects || []), projectEntry] });
         }
         setCurrentSong({ data: { ...projectEntry }, answers: {} });
         setCurrentSongAnswers({});
