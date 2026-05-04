@@ -693,7 +693,7 @@ function bgColor(progress) {
 import { initializeApp } from "firebase/app";
 import {
   getFirestore, doc, getDoc, setDoc, collection,
-  getDocs, onSnapshot, writeBatch
+  getDocs, onSnapshot, writeBatch, deleteDoc
 } from "firebase/firestore";
 
 const firebaseConfig = {
@@ -732,7 +732,7 @@ function clearState() {
 // ── In-memory store — Firebase is single source of truth ──
 // All reads come from this store, all writes go to Firestore
 // ── In-memory store — seeded from localStorage, updated by Firebase in real-time ──
-let _artists = (() => { try { return JSON.parse(localStorage.getItem("artists_cache") || "[]"); } catch(e) { return []; } })();
+// Artists meta and projects are in separate caches now (handled in data layer above)
 let _labelUsers = (() => { try { return JSON.parse(localStorage.getItem("tool_label_users_v1") || "{}"); } catch(e) { return {}; } })();
 let _artistUsers = (() => { try { return JSON.parse(localStorage.getItem("tool_artist_users_v1") || "{}"); } catch(e) { return {}; } })();
 let _mgmtUsers = (() => { try { return JSON.parse(localStorage.getItem("tool_mgmt_users_v1") || "{}"); } catch(e) { return {}; } })();
@@ -741,79 +741,110 @@ let _listeners = [];
 function notifyListeners() { _listeners.forEach(fn => fn()); }
 function subscribeStore(fn) { _listeners.push(fn); return () => { _listeners = _listeners.filter(f => f !== fn); }; }
 
-// ── Artists ──
-function getArtists() { return _artists; }
+// ── In-memory store: artists metadata + projects separate ──
+let _artistsMeta = (() => { try { return JSON.parse(localStorage.getItem("artists_meta_cache")||"[]"); } catch(e) { return []; } })();
+let _projects    = (() => { try { return JSON.parse(localStorage.getItem("projects_cache")||"[]"); } catch(e) { return []; } })();
 
-async function saveArtists(artists) {
-  _artists = artists;
-  notifyListeners();
-  try {
-    // Get current Firestore artists to find deleted ones
-    const snap = await getDocs(collection(db, "artists"));
-    const batch = writeBatch(db);
-    // Delete artists that are no longer in the list
-    snap.docs.forEach(d => {
-      if (!artists.find(a => a.id === d.id)) batch.delete(d.ref);
-    });
-    // Upsert all current artists
-    artists.forEach(a => {
-      const ref = doc(db, "artists", a.id);
-      batch.set(ref, a);
-    });
-    await batch.commit();
-  } catch(e) { console.warn("saveArtists failed", e); }
+// Computed: artists with projects merged in
+function getArtists() {
+  return _artistsMeta.map(a => ({ ...a, projects: _projects.filter(p => p.artistId === a.id) }));
 }
 
-// Save a single artist (more efficient than saving all)
-async function saveOneArtist(artist) {
-  if (!artist?.id) { console.error("saveOneArtist: missing id", artist); return; }
-  // Update in-memory immediately
-  const idx = _artists.findIndex(a => a.id === artist.id);
-  if (idx >= 0) _artists[idx] = artist; else _artists.push(artist);
-  try { localStorage.setItem("artists_cache", JSON.stringify(_artists)); } catch(e) {}
-  notifyListeners();
-  // Write to Firestore
+function _saveCache() {
   try {
-    await setDoc(doc(db, "artists", artist.id), artist);
-    console.log("✅ Guardado en Firebase:", artist.id, "proyectos:", artist.projects?.length ?? 0);
-  } catch(e) {
-    console.error("❌ Firebase error:", e.code, e.message);
-    _firebaseError = `${e.code}: ${e.message}`;
-    notifyListeners();
-  }
+    localStorage.setItem("artists_meta_cache", JSON.stringify(_artistsMeta));
+    localStorage.setItem("projects_cache", JSON.stringify(_projects));
+  } catch(e) {}
 }
 
 let _firebaseError = null;
 function getFirebaseError() { return _firebaseError; }
 function clearFirebaseError() { _firebaseError = null; }
 
-// ── Save a project to its artist — works regardless of origin ──
-async function saveProject(projectEntry, artistId) {
-  if (!artistId) { console.error("saveProject: no artistId"); return false; }
-  // Always read fresh from _artists
-  let artist = _artists.find(a => a.id === artistId);
-  if (!artist) { console.error("saveProject: artist not found", artistId, _artists.map(a=>a.id)); return false; }
-  const existingIdx = (artist.projects || []).findIndex(p => p.id === projectEntry.id);
-  let projects;
-  if (existingIdx >= 0) {
-    projects = artist.projects.map((p, i) => i === existingIdx ? { ...p, ...projectEntry } : p);
-  } else {
-    projects = [...(artist.projects || []), projectEntry];
-  }
-  const updatedArtist = { ...artist, projects };
-  await saveOneArtist(updatedArtist);
-  console.log("✅ saveProject:", projectEntry.id, "→ artist:", artist.name, "total projects:", projects.length);
-  return true;
+// Strip base64 photos (too large for Firestore 1MB limit)
+function _stripPhoto(obj) {
+  if (!obj) return obj;
+  const r = { ...obj };
+  if (r.photo?.startsWith?.('data:')) r.photo = null;
+  return r;
 }
 
+// Save artist metadata only (no projects, no photos to Firestore)
+async function saveOneArtist(artist) {
+  if (!artist?.id) { console.error("saveOneArtist: missing id"); return; }
+  const { projects, ...meta } = artist;
+  const metaClean = _stripPhoto({ ...meta });
+  // Update in-memory meta
+  const idx = _artistsMeta.findIndex(a => a.id === meta.id);
+  if (idx >= 0) _artistsMeta[idx] = metaClean; else _artistsMeta.push(metaClean);
+  // Also upsert projects if provided
+  if (projects) {
+    projects.forEach(p => {
+      const pi = _projects.findIndex(x => x.id === p.id);
+      const proj = { ..._stripPhoto(p), artistId: meta.id };
+      if (pi >= 0) _projects[pi] = proj; else _projects.push(proj);
+    });
+  }
+  _saveCache();
+  notifyListeners();
+  try {
+    await setDoc(doc(db, "artists", meta.id), metaClean);
+    console.log("✅ artist saved:", meta.name);
+  } catch(e) {
+    console.error("❌ artist save failed:", e.code, e.message);
+    _firebaseError = `${e.code}: ${e.message}`; notifyListeners();
+  }
+}
+
+// Save a single project as its own Firestore document
+async function saveProject(project, artistId) {
+  if (!project?.id || !artistId) { console.error("saveProject: missing id/artistId"); return false; }
+  // Compress answers: only store true values
+  const answers = {};
+  Object.entries(project.answers || {}).forEach(([k,v]) => { if (v === true) answers[k] = true; });
+  const p = { ..._stripPhoto(project), artistId, answers };
+  // Update in-memory
+  const pi = _projects.findIndex(x => x.id === p.id);
+  if (pi >= 0) _projects[pi] = p; else _projects.push(p);
+  _saveCache();
+  notifyListeners();
+  try {
+    await setDoc(doc(db, "projects", p.id), p);
+    console.log("✅ project saved:", p.title, "answers:", Object.keys(answers).length);
+    return true;
+  } catch(e) {
+    console.error("❌ project save failed:", e.code, e.message);
+    _firebaseError = `${e.code}: ${e.message}`; notifyListeners();
+    return false;
+  }
+}
+
+// Save all artists (used by batch operations)
+async function saveArtists(artists) {
+  for (const a of artists) await saveOneArtist(a);
+}
+
+// Delete artists and their projects
 async function deleteArtists(ids) {
-  _artists = _artists.filter(a => !ids.includes(a.id));
+  const projectIds = _projects.filter(p => ids.includes(p.artistId)).map(p => p.id);
+  _artistsMeta = _artistsMeta.filter(a => !ids.includes(a.id));
+  _projects = _projects.filter(p => !ids.includes(p.artistId));
+  _saveCache();
   notifyListeners();
   try {
     const batch = writeBatch(db);
     ids.forEach(id => batch.delete(doc(db, "artists", id)));
+    projectIds.forEach(id => batch.delete(doc(db, "projects", id)));
     await batch.commit();
   } catch(e) { console.warn("deleteArtists failed", e); }
+}
+
+// Delete a project by id
+async function deleteProjectById(projectId) {
+  _projects = _projects.filter(p => p.id !== projectId);
+  _saveCache();
+  notifyListeners();
+  try { await deleteDoc(doc(db, "projects", projectId)); } catch(e) { console.warn("deleteProject failed", e); }
 }
 
 // ── Artist users ──
@@ -856,18 +887,40 @@ async function saveMgmtUsers(users) {
 
 // ── Real-time listeners — subscribe to all Firestore changes ──
 function startRealtimeSync(onReady) {
-  let artistsReady = false, configReady = false;
-  const checkReady = () => { if (artistsReady && configReady) onReady(); };
+  let artistsReady = false, projectsReady = false, configReady = false;
+  const checkReady = () => { if (artistsReady && projectsReady && configReady) onReady(); };
 
-  // Artists — real-time
+  // Artists metadata — real-time
   const unsubArtists = onSnapshot(collection(db, "artists"), snap => {
-    _artists = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    try { localStorage.setItem("artists_cache", JSON.stringify(_artists)); } catch(e) {}
+    const localMeta = (() => { try { return JSON.parse(localStorage.getItem("artists_meta_cache")||"[]"); } catch(e) { return []; } })();
+    _artistsMeta = snap.docs.map(d => {
+      const fb = { id: d.id, ...d.data() };
+      const local = localMeta.find(a => a.id === fb.id);
+      // Restore photo from local cache (not stored in Firestore)
+      return { ...fb, photo: fb.photo || local?.photo || null };
+    });
+    _saveCache();
     notifyListeners();
     if (!artistsReady) { artistsReady = true; checkReady(); }
   }, err => {
     console.warn("Artists snapshot error", err);
     if (!artistsReady) { artistsReady = true; checkReady(); }
+  });
+
+  // Projects — real-time
+  const unsubProjects = onSnapshot(collection(db, "projects"), snap => {
+    const localProjs = (() => { try { return JSON.parse(localStorage.getItem("projects_cache")||"[]"); } catch(e) { return []; } })();
+    _projects = snap.docs.map(d => {
+      const fb = { id: d.id, ...d.data() };
+      const local = localProjs.find(p => p.id === fb.id);
+      return { ...fb, photo: fb.photo || local?.photo || null };
+    });
+    _saveCache();
+    notifyListeners();
+    if (!projectsReady) { projectsReady = true; checkReady(); }
+  }, err => {
+    console.warn("Projects snapshot error", err);
+    if (!projectsReady) { projectsReady = true; checkReady(); }
   });
 
   // Config docs — real-time
@@ -890,7 +943,7 @@ function startRealtimeSync(onReady) {
     if (snap.exists()) { _mgmtUsers = snap.data(); try { localStorage.setItem("tool_mgmt_users_v1", JSON.stringify(_mgmtUsers)); } catch(e) {} }
   });
 
-  return () => { unsubArtists(); unsubConfig(); };
+  return () => { unsubArtists(); unsubProjects(); unsubConfig(); };
 }
 
 // ═══════════════════════════════════════════
@@ -2668,9 +2721,9 @@ function ArtistCatalogueScreen({ artistData, profile, onBack, onNewProject, onOp
 
   const allArtists = getArtists();
   // Always read fresh from store — artistData prop may be stale
-  const liveArtist = allArtists.find(a => a.id === artistData?.id) || artistData;
-  const linkedProjects = (liveArtist?.projects || [])
-    .map(p => ({ ...p, artistId: liveArtist.id, artistName: liveArtist.name, artistPhoto: liveArtist.photo }))
+  const liveArtist = _artistsMeta.find(a => a.id === artistData?.id) || artistData;
+  const linkedProjects = _projects
+    .filter(p => p.artistId === artistData?.id)
     .sort((a, b) => {
       const dateA = a.date ? new Date(a.date) : a.createdAt ? new Date(a.createdAt) : new Date(0);
       const dateB = b.date ? new Date(b.date) : b.createdAt ? new Date(b.createdAt) : new Date(0);
@@ -2684,9 +2737,7 @@ function ArtistCatalogueScreen({ artistData, profile, onBack, onNewProject, onOp
   );
 
   const handleDelete = () => {
-    if (liveArtist) {
-      saveOneArtist({ ...liveArtist, projects: (liveArtist.projects || []).filter(p => !selected.includes(p.id)) });
-    }
+    selected.forEach(id => deleteProjectById(id));
     setSelected([]);
     setEditMode(false);
   };
@@ -3352,8 +3403,8 @@ export default function App() {
   // Helper — persist current project answers/score back to artist record
   function syncProjectToArtist(projectData, answers, score) {
     if (!projectData?.id) return;
-    const artistId = projectData?.linkedArtist?.id || projectData?.artistId || artistData?.id;
-    if (!artistId) { console.warn("syncProjectToArtist: no artistId for", projectData.id); return; }
+    const artistId = projectData?.artistId || projectData?.linkedArtist?.id || artistData?.id;
+    if (!artistId) { console.warn("syncProjectToArtist: no artistId"); return; }
     const updated = { ...projectData, answers, ...(score !== undefined ? { score } : {}) };
     saveProject(updated, artistId);
   }
