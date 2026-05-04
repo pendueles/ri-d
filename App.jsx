@@ -1614,7 +1614,15 @@ function ArtistHomeScreen({ artistData, artistAnswers, onBlock, onResult, onBack
                   const px = cxh + R * Math.cos(rad(v.angle));
                   const py = cyh + R * Math.sin(rad(v.angle));
                   const isRes = v.id === 'result';
-                  if (isRes) return null; // shown as big number below
+                  if (isRes) {
+                    return s !== null ? (
+                      <div key={v.id} style={{position:'absolute', left:`${px}px`, top:`${py}px`, transform:'translate(-50%,-50%)',
+                        background:t.accent, borderRadius:'20px', padding:'5px 12px',
+                        fontFamily:'Arial,sans-serif', fontSize: S > 200 ? '18px' : '13px', fontWeight:'700', color:'#fff', pointerEvents:'none', whiteSpace:'nowrap'}}>
+                        {s}
+                      </div>
+                    ) : null;
+                  }
                   return (
                     <div key={v.id} style={{position:'absolute', left:`${px}px`, top:`${py}px`, transform:'translate(-50%,-50%)',
                       background: s!==null ? t.text : t.bg2,
@@ -1627,11 +1635,6 @@ function ArtistHomeScreen({ artistData, artistAnswers, onBlock, onResult, onBack
                   );
                 })}
               </div>
-              {score !== null ? (
-                <div style={{fontFamily:'Arial,sans-serif', fontSize:'22px', fontWeight:'700', color:scoreColor(score)}}>{score}</div>
-              ) : (
-                <div style={{fontFamily:'Arial,sans-serif', fontSize:'12px', color:t.text3}}>Sin datos</div>
-              )}
             </div>
           );
 
@@ -1689,13 +1692,13 @@ function ArtistHomeScreen({ artistData, artistAnswers, onBlock, onResult, onBack
         ];
 
         return (
-          <div style={{flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'8px 16px', gap:'16px', overflowY:'auto'}}>
+          <div style={{flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'8px 16px', gap:'16px', overflowY:'auto', width:'100%'}}>
             {/* General — top, biggest */}
-            <MiniHex title="General" score={generalScore} vertices={artistVerts} getScore={getGeneralBlockScore} size={260}/>
+            <MiniHex title="General" score={generalScore} vertices={artistVerts} getScore={getGeneralBlockScore} size={Math.min(window.innerWidth * 0.80, 380)}/>
             {/* Perfil + Catálogo — side by side below */}
             <div style={{display:'flex', gap:'8px', justifyContent:'center'}}>
-              <MiniHex title="Perfil" score={artistScore} vertices={artistVerts} getScore={getArtistBlockScore} onClick={onProfile} size={170}/>
-              <MiniHex title="Catálogo" score={catAvg} vertices={songVerts} getScore={getCatBlockScore} onClick={onCatalogue} size={170}/>
+              <MiniHex title="Perfil" score={artistScore} vertices={artistVerts} getScore={getArtistBlockScore} onClick={onProfile} size={Math.min(window.innerWidth * 0.42, 220)}/>
+              <MiniHex title="Catálogo" score={catAvg} vertices={songVerts} getScore={getCatBlockScore} onClick={onCatalogue} size={Math.min(window.innerWidth * 0.42, 220)}/>
             </div>
           </div>
         );
@@ -3769,7 +3772,7 @@ export default function App() {
       if (blockEnd !== undefined) { const bi = SONG_BLOCK_ENDS.indexOf(blockEnd); setCurrentBlockIdx(bi); setSongQIdx(next); setPhase("song-block-summary"); return; }
       setSongQIdx(next); return;
     }
-    const newAnswers = { ...currentSong.answers, [id]: val };
+    const newAnswers = { ...(currentSong?.answers || {}), [id]: val };
     setCurrentSong(s => ({ ...s, answers: newAnswers }));
     syncProjectToArtist(currentSong?.data, newAnswers);
     const next = songQIdx + 1;
@@ -4073,9 +4076,12 @@ export default function App() {
         onGoHome={() => setPhase("song-home")}
         onSubcat={(subcatId) => {
           let startIdx = 0;
+          let foundBlock = null;
           for (const b of SONG_BLOCKS) {
             for (const sub of b.subcats) {
               if (b.id === block.id && sub.id === subcatId) {
+                const blockIdx = SONG_BLOCKS.findIndex(x => x.id === b.id);
+                setCurrentBlockIdx(blockIdx);
                 setSongQIdx(startIdx);
                 setPhase("song-questions");
                 return;
@@ -4241,6 +4247,7 @@ export default function App() {
   // ARTIST QUESTIONS
   if (phase === "artist-questions") {
     const q = ARTIST_QUESTIONS[artistQIdx];
+    if (!q) { setPhase("block-home"); return null; }
     return (
       <SwipeCard
         question={q}
@@ -4354,6 +4361,7 @@ export default function App() {
   // SONG QUESTIONS
   if (phase === "song-questions") {
     const q = SONG_QUESTIONS[songQIdx];
+    if (!q) { setPhase("song-block-home"); return null; }
     return (
       <SwipeCard
         question={q}
