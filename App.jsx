@@ -687,17 +687,6 @@ function bgColor(progress) {
   return `rgb(${r},${g},${b})`;
 }
 
-const STORAGE_KEY = "tool_pwa_v1";
-function saveState(state) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch(e){}
-}
-function loadState() {
-  try { const s = localStorage.getItem(STORAGE_KEY); return s ? JSON.parse(s) : null; } catch(e){ return null; }
-}
-function clearState() {
-  try { localStorage.removeItem(STORAGE_KEY); } catch(e){}
-}
-
 // ═══════════════════════════════════════════
 // FIREBASE CONFIG & DATA LAYER
 // ═══════════════════════════════════════════
