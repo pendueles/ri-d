@@ -693,7 +693,7 @@ function bgColor(progress) {
 import { initializeApp } from "firebase/app";
 import {
   getFirestore, doc, getDoc, setDoc, collection,
-  getDocs, deleteDoc, onSnapshot, writeBatch
+  getDocs, writeBatch
 } from "firebase/firestore";
 
 const firebaseConfig = {
@@ -708,7 +708,7 @@ const firebaseConfig = {
 const firebaseApp = initializeApp(firebaseConfig);
 const db = getFirestore(firebaseApp);
 
-// ── Session state (local only — UI state, not data) ──
+// ── Session state (local only — UI state) ──
 const STORAGE_KEY = "tool_pwa_v1";
 function saveState(state) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch(e){}
@@ -720,20 +720,18 @@ function clearState() {
   try { localStorage.removeItem(STORAGE_KEY); } catch(e){}
 }
 
-// ── Artists (Firestore) ──
-async function getArtistsAsync() {
-  try {
-    const snap = await getDocs(collection(db, "artists"));
-    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  } catch(e) { return []; }
-}
+// ── Artists (Firestore + local cache) ──
 function getArtists() {
-  // Sync fallback from cache
   try { const s = localStorage.getItem("artists_cache"); return s ? JSON.parse(s) : []; } catch(e){ return []; }
 }
 async function saveArtistsAsync(artists) {
   try {
     const batch = writeBatch(db);
+    // Delete removed artists
+    const existing = await getDocs(collection(db, "artists"));
+    existing.docs.forEach(d => {
+      if (!artists.find(a => a.id === d.id)) batch.delete(d.ref);
+    });
     artists.forEach(a => {
       const ref = doc(db, "artists", a.id || Date.now().toString());
       batch.set(ref, a);
@@ -777,39 +775,28 @@ function saveLabelUsers(users) {
   setDoc(doc(db, "config", "labelUsers"), { ...DEFAULT_LABEL_USERS, ...users }).catch(() => {});
 }
 
+// ── Mgmt users ──
+function getMgmtUsers() {
+  try { return JSON.parse(localStorage.getItem("tool_mgmt_users_v1") || "{}"); } catch(e) { return {}; }
+}
+function saveMgmtUsers(users) {
+  try { saveMgmtUsers(users); } catch(e) {}
+  setDoc(doc(db, "config", "mgmtUsers"), users).catch(() => {});
+}
+
 // ── Sync from Firestore on load ──
 async function syncFromFirestore() {
   try {
-    // Sync artists
     const snap = await getDocs(collection(db, "artists"));
     const artists = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    if (artists.length > 0) {
-      localStorage.setItem("artists_cache", JSON.stringify(artists));
-    }
-    // Sync label users
+    if (artists.length > 0) localStorage.setItem("artists_cache", JSON.stringify(artists));
     const luSnap = await getDoc(doc(db, "config", "labelUsers"));
-    if (luSnap.exists()) {
-      localStorage.setItem(LABEL_USERS_KEY, JSON.stringify(luSnap.data()));
-    }
-    // Sync artist users
+    if (luSnap.exists()) localStorage.setItem(LABEL_USERS_KEY, JSON.stringify(luSnap.data()));
     const auSnap = await getDoc(doc(db, "config", "artistUsers"));
-    if (auSnap.exists()) {
-      localStorage.setItem(ARTIST_USERS_KEY, JSON.stringify(auSnap.data()));
-    }
-    // Sync mgmt users
+    if (auSnap.exists()) localStorage.setItem(ARTIST_USERS_KEY, JSON.stringify(auSnap.data()));
     const mgmtSnap = await getDoc(doc(db, "config", "mgmtUsers"));
-    if (mgmtSnap.exists()) {
-      localStorage.setItem("tool_mgmt_users_v1", JSON.stringify(mgmtSnap.data()));
-    }
+    if (mgmtSnap.exists()) localStorage.setItem("tool_mgmt_users_v1", JSON.stringify(mgmtSnap.data()));
   } catch(e) { console.warn("Firestore sync failed, using local cache", e); }
-}
-
-function saveMgmtUsers(users) {
-  try { localStorage.setItem("tool_mgmt_users_v1", JSON.stringify(users)); } catch(e) {}
-  setDoc(doc(db, "config", "mgmtUsers"), users).catch(() => {});
-}
-function getMgmtUsers() {
-  try { return JSON.parse(localStorage.getItem("tool_mgmt_users_v1") || "{}"); } catch(e) { return {}; } 
 }
 
 // ═══════════════════════════════════════════
@@ -1383,9 +1370,12 @@ function ArtistHomeScreen({ artistData, artistAnswers, onBlock, onResult, onBack
             <div style={{fontFamily:'Arial,sans-serif', fontSize:'28px', fontWeight:'700', color:t.text, letterSpacing:'-0.5px', lineHeight:1}}>
               {artistData.name}
             </div>
-            {artistData.management && (
-              <div style={{fontFamily:'Arial,sans-serif', fontSize:'12px', color:t.text3, marginTop:'2px'}}>{artistData.management}</div>
-            )}
+            {(() => {
+                const labels = artistData.labelUsers?.length > 0 ? artistData.labelUsers : [artistData.labelUser].filter(Boolean);
+                return labels.length > 0 ? (
+                  <div style={{fontFamily:'Arial,sans-serif', fontSize:'12px', color:t.text3, marginTop:'2px'}}>{labels.join(', ')}</div>
+                ) : null;
+              })()}
           </div>
           <span style={{fontSize:'14px', color:t.text3, marginLeft:'2px'}}>✎</span>
         </button>
@@ -1850,7 +1840,9 @@ function ArtistListScreen({ profile, onBack, onSelect, onCreate }) {
                 )}
                 <div style={{ flex:1, minWidth:0 }}>
                   <div style={{ fontFamily:"Arial,sans-serif", fontSize:"16px", fontWeight:"700", color:t.text, marginBottom:"2px" }}>{artist.name}</div>
-                  <div style={{ fontFamily:"Arial,sans-serif", fontSize:"12px", color: artist.management ? t.text2 : t.accent }}>{artist.management || "Sin management"}</div>
+                  <div style={{ fontFamily:"Arial,sans-serif", fontSize:"12px", color:t.text2 }}>
+                    {(artist.labelUsers?.length > 0 ? artist.labelUsers : [artist.labelUser].filter(Boolean)).join(', ') || "Sin label manager"}
+                  </div>
                 </div>
                 {!editMode && canEdit && (
                   <button onClick={e => { e.stopPropagation(); setEditingManagement(artist); setMgmtInput(artist.management || ''); }}
@@ -3023,7 +3015,6 @@ export default function App() {
   const [syncing, setSyncing] = useState(true);
 
   useEffect(() => {
-    // Sync from Firestore on load, then check for saved session
     syncFromFirestore().finally(() => {
       setSyncing(false);
       const saved = loadState();
