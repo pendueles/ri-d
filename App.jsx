@@ -722,10 +722,11 @@ function clearState() {
 
 // ── In-memory store — Firebase is single source of truth ──
 // All reads come from this store, all writes go to Firestore
-let _artists = [];
-let _labelUsers = {};
-let _artistUsers = {};
-let _mgmtUsers = {};
+// ── In-memory store — seeded from localStorage, updated by Firebase in real-time ──
+let _artists = (() => { try { return JSON.parse(localStorage.getItem("artists_cache") || "[]"); } catch(e) { return []; } })();
+let _labelUsers = (() => { try { return JSON.parse(localStorage.getItem("tool_label_users_v1") || "{}"); } catch(e) { return {}; } })();
+let _artistUsers = (() => { try { return JSON.parse(localStorage.getItem("tool_artist_users_v1") || "{}"); } catch(e) { return {}; } })();
+let _mgmtUsers = (() => { try { return JSON.parse(localStorage.getItem("tool_mgmt_users_v1") || "{}"); } catch(e) { return {}; } })();
 let _listeners = [];
 
 function notifyListeners() { _listeners.forEach(fn => fn()); }
@@ -820,6 +821,7 @@ function startRealtimeSync(onReady) {
   // Artists — real-time
   const unsubArtists = onSnapshot(collection(db, "artists"), snap => {
     _artists = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    try { localStorage.setItem("artists_cache", JSON.stringify(_artists)); } catch(e) {}
     notifyListeners();
     if (!artistsReady) { artistsReady = true; checkReady(); }
   }, err => {
@@ -829,7 +831,11 @@ function startRealtimeSync(onReady) {
 
   // Config docs — real-time
   const unsubConfig = onSnapshot(doc(db, "config", "labelUsers"), snap => {
-    if (snap.exists()) { _labelUsers = snap.data(); notifyListeners(); }
+    if (snap.exists()) {
+      _labelUsers = snap.data();
+      try { localStorage.setItem("tool_label_users_v1", JSON.stringify(_labelUsers)); } catch(e) {}
+      notifyListeners();
+    }
     if (!configReady) { configReady = true; checkReady(); }
   }, err => {
     console.warn("Config snapshot error", err);
@@ -837,10 +843,10 @@ function startRealtimeSync(onReady) {
   });
 
   onSnapshot(doc(db, "config", "artistUsers"), snap => {
-    if (snap.exists()) _artistUsers = snap.data();
+    if (snap.exists()) { _artistUsers = snap.data(); try { localStorage.setItem("tool_artist_users_v1", JSON.stringify(_artistUsers)); } catch(e) {} }
   });
   onSnapshot(doc(db, "config", "mgmtUsers"), snap => {
-    if (snap.exists()) _mgmtUsers = snap.data();
+    if (snap.exists()) { _mgmtUsers = snap.data(); try { localStorage.setItem("tool_mgmt_users_v1", JSON.stringify(_mgmtUsers)); } catch(e) {} }
   });
 
   return () => { unsubArtists(); unsubConfig(); };
@@ -1660,6 +1666,7 @@ function ProfileSelect({ onSelect }) {
   const t = theme(isDark());
   const [name, setName] = useState('');
   const [error, setError] = useState('');
+  useFirebaseStore(); // re-render when Firebase data arrives
 
   const handleEnter = () => {
     const n = name.trim();
@@ -3362,7 +3369,7 @@ export default function App() {
   // ══════════════════════════════════════════
 
   // SPLASH
-  if (showSplash || syncing) return <SplashScreen onDone={() => setShowSplash(false)}/>;
+  if (showSplash) return <SplashScreen onDone={() => setShowSplash(false)}/>;
 
   // PROFILE SELECTION
   if (!profile) return <ProfileSelect onSelect={(p) => {
