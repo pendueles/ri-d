@@ -1124,7 +1124,7 @@ function SwipeCard({ question, onAnswer, currentIndex, total, answers, blockLabe
         >
           {/* Block badge */}
           <div style={{ marginBottom:"24px" }}>
-            <span style={{ fontFamily:"Arial,sans-serif", fontSize:"10px", fontWeight:"700", color:"#E8151B", letterSpacing:"0.12em", textTransform:"uppercase" }}>{blockLabel}</span>
+            <span style={{ fontFamily:"Arial,sans-serif", fontSize:"10px", fontWeight:"700", color:t?.text3 || "#bbb", letterSpacing:"0.12em", textTransform:"uppercase" }}>{blockLabel}</span>
           </div>
 
           {/* Question + hint */}
@@ -1147,14 +1147,14 @@ function SwipeCard({ question, onAnswer, currentIndex, total, answers, blockLabe
 
           {/* Already answered indicator */}
           {answered !== undefined && (
-            <div style={{ padding:"8px 12px", borderRadius:"8px", background: answered ? "#f0fdf4" : "#fef2f2", border:`1px solid ${answered ? "#86efac" : "#fca5a5"}`, fontFamily:"Arial,sans-serif", fontSize:"12px", fontWeight:"700", color: answered ? "#15803d" : "#b91c1c", textAlign:"center", marginBottom:"16px" }}>
+            <div style={{ padding:"8px 12px", borderRadius:"8px", background: answered ? "#f0fdf4" : t.bg2, border:`1px solid ${answered ? "#86efac" : t.border}`, fontFamily:"Arial,sans-serif", fontSize:"12px", fontWeight:"700", color: answered ? "#15803d" : t.text2, textAlign:"center", marginBottom:"16px" }}>
               {answered ? "✓ SÍ" : "✗ NO"} — desliza para cambiar
             </div>
           )}
 
           {/* Swipe hint */}
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-            <span style={{ fontFamily:"Arial,sans-serif", fontSize:"11px", color:"#E8151B", fontWeight:"700" }}>← NO</span>
+            <span style={{ fontFamily:"Arial,sans-serif", fontSize:"11px", color:"#888", fontWeight:"700" }}>← NO</span>
             <span style={{ fontFamily:"Arial,sans-serif", fontSize:"10px", color:"#ccc" }}>desliza</span>
             <span style={{ fontFamily:"Arial,sans-serif", fontSize:"11px", color:"#111", fontWeight:"700" }}>SÍ →</span>
           </div>
@@ -1169,7 +1169,7 @@ function SwipeCard({ question, onAnswer, currentIndex, total, answers, blockLabe
             ✗ NO
           </button>
           <button onClick={() => triggerAnswer(true)}
-            style={{ flex:1, padding:"16px", background:"#E8151B", color:"white", border:"none", borderRadius:"14px", fontFamily:"Arial,sans-serif", fontSize:"16px", fontWeight:"700", cursor:"pointer" }}>
+            style={{ flex:1, padding:"16px", background:"#111", color:"white", border:"none", borderRadius:"14px", fontFamily:"Arial,sans-serif", fontSize:"16px", fontWeight:"700", cursor:"pointer" }}>
             ✓ SÍ
           </button>
         </div>
@@ -1330,12 +1330,12 @@ function BlockHomeScreen({ block, artistAnswers, onSubcat, onBack, artistName, o
   // Map subcats to hexagon vertices based on block id
   const getVertices = () => {
     if (block.id === 'dsps') return [
-      { id:'result',     label:'Total',        angle: -90  },
-      { id:'spotify',    label:'Spotify',      angle: -150 },
-      { id:'apple',      label:'Apple Music',  angle: -30  },
-      { id:'otherdsps',  label:'Other DSPs',   angle:  30  },
-      { id:'soundcloud', label:'SoundCloud & Beatport', angle:  90  },
-      { id:'ytmusic',    label:'YT Music',     angle:  150 },
+      { id:'result',       label:'Total',               angle: -90  },
+      { id:'spotify',      label:'Spotify',             angle: -150 },
+      { id:'apple_music',  label:'Apple Music',         angle: -30  },
+      { id:'other_dsps',   label:'Other DSPs',          angle:  30  },
+      { id:'soundcloud',   label:'SoundCloud & Beatport', angle:  90 },
+      { id:'youtube_music',label:'YT Music',            angle:  150 },
     ];
     if (block.id === 'social') return [
       { id:'result',    label:'Puntuación',  angle: -90  },
@@ -2544,9 +2544,10 @@ function PendingTasksScreen({ blocks, answers, title, onBack, onGoToQuestion }) 
   const t = theme(isDark());
 
   // Build pending tasks grouped by block > subcat
+  // Pending = answered NO (false) OR not yet answered (undefined)
   const groups = blocks.map(block => {
     const subcats = block.subcats.map(sub => {
-      const pending = sub.items.filter(item => answers[item.id] === false);
+      const pending = sub.items.filter(item => answers[item.id] !== true);
       return { ...sub, pending };
     }).filter(s => s.pending.length > 0);
     return { ...block, subcats };
@@ -2588,23 +2589,26 @@ function PendingTasksScreen({ blocks, answers, title, onBack, onGoToQuestion }) 
             {groups.map(block => (
               <div key={block.id}>
                 {/* Block header */}
-                <div style={{fontFamily:'Arial,sans-serif', fontSize:'11px', fontWeight:'700', color:'#E8151B', letterSpacing:'0.12em', textTransform:'uppercase', marginBottom:'10px'}}>
+                <div style={{fontFamily:'Arial,sans-serif', fontSize:'20px', fontWeight:'700', color:t.text, marginBottom:'12px', paddingTop:'8px'}}>
                   {block.label}
                 </div>
                 <div style={{display:'flex', flexDirection:'column', gap:'8px'}}>
                   {block.subcats.map(sub => (
                     <div key={sub.id}>
                       {/* Subcat label */}
-                      <div style={{fontFamily:'Arial,sans-serif', fontSize:'11px', fontWeight:'600', color:t.text3, letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:'6px', paddingLeft:'4px'}}>
+                      <div style={{fontFamily:'Arial,sans-serif', fontSize:'14px', fontWeight:'700', color:t.text2, marginBottom:'8px', marginTop:'12px', paddingLeft:'2px'}}>
                         {sub.label}
                       </div>
                       {/* Tasks */}
                       {sub.pending.map(item => (
                         <button key={item.id}
                           onClick={() => onGoToQuestion(questionIndex[item.id])}
-                          style={{display:'flex', alignItems:'center', gap:'12px', width:'100%', padding:'14px 14px', background:t.card, border:`1px solid ${t.border}`, borderRadius:'12px', cursor:'pointer', textAlign:'left', marginBottom:'6px'}}>
-                          <div style={{width:'22px', height:'22px', borderRadius:'50%', border:`2px solid #E8151B`, background:'#E8151B18', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0}}>
-                            <span style={{color:'#E8151B', fontSize:'10px', fontWeight:'700'}}>✗</span>
+                          style={{display:'flex', alignItems:'center', gap:'12px', width:'100%', padding:'14px 14px', background:t.card, border:`1px solid ${answers[item.id] === false ? '#E8151B44' : t.border}`, borderRadius:'12px', cursor:'pointer', textAlign:'left', marginBottom:'6px'}}>
+                          <div style={{width:'22px', height:'22px', borderRadius:'50%', border:`2px solid ${answers[item.id] === false ? '#E8151B' : t.border}`, background: answers[item.id] === false ? '#E8151B18' : 'transparent', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0}}>
+                            {answers[item.id] === false
+                              ? <span style={{color:'#E8151B', fontSize:'10px', fontWeight:'700'}}>✗</span>
+                              : <span style={{color:t.text3, fontSize:'10px'}}>○</span>
+                            }
                           </div>
                           <div style={{flex:1, fontFamily:'Arial,sans-serif', fontSize:'13px', color:t.text, lineHeight:'1.4'}}>{item.q}</div>
                           <div style={{fontFamily:'Arial,sans-serif', fontSize:'11px', fontWeight:'700', color:t.text3, flexShrink:0}}>{item.w}pts</div>
@@ -2707,9 +2711,9 @@ function SubcatSummaryScreen({ subcatInfo, photo, phaseName, onContinue, onBack 
               const isNo = answers?.[item.id] === false;
               const isUnanswered = answers?.[item.id] === undefined;
               return (
-                <div key={item.id} style={{display:"flex", alignItems:"center", gap:"10px", padding:"10px 12px", background:t.card, border:`1px solid ${isYes ? color+"44" : isNo ? "#E8151B22" : t.border}`, borderRadius:"10px"}}>
-                  <div style={{width:"20px", height:"20px", borderRadius:"50%", background: isYes ? color+"22" : isNo ? "#E8151B22" : t.bg2, border:`1.5px solid ${isYes ? color : isNo ? "#E8151B" : t.border}`, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0}}>
-                    <span style={{fontSize:"10px", color: isYes ? color : isNo ? "#E8151B" : t.text3}}>{isYes ? "✓" : isNo ? "✗" : "–"}</span>
+                <div key={item.id} style={{display:"flex", alignItems:"center", gap:"10px", padding:"10px 12px", background:t.card, border:`1px solid ${isYes ? color+"44" : t.border}`, borderRadius:"10px"}}>
+                  <div style={{width:"20px", height:"20px", borderRadius:"50%", background: isYes ? color+"22" : t.bg2, border:`1.5px solid ${isYes ? color : t.border}`, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0}}>
+                    <span style={{fontSize:"10px", color: isYes ? color : t.text3}}>{isYes ? "✓" : isNo ? "✗" : "–"}</span>
                   </div>
                   <div style={{flex:1, minWidth:0, fontFamily:"Arial,sans-serif", fontSize:"12px", color: isUnanswered ? t.text3 : t.text, lineHeight:"1.3"}}>{item.q}</div>
                   <div style={{fontFamily:"Arial,sans-serif", fontSize:"11px", fontWeight:"700", color: isYes ? color : t.text3, flexShrink:0}}>{isYes ? `+${item.w}` : `${item.w}pts`}</div>
