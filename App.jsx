@@ -1288,10 +1288,9 @@ function BlockHomeScreen({ block, artistAnswers, onSubcat, onBack, artistName })
     const pts = vertices.map(v => {
       let score;
       if (v.id === 'result') {
-        // total score for the block
-        const allAnswered = block.subcats.some(s => s.items.some(i => answers[i.id] !== undefined));
+        const allAnswered = block.subcats.some(s => s.items.some(i => artistAnswers[i.id] !== undefined));
         if (!allAnswered) return null;
-        score = calcBlockScore(block, answers);
+        score = calcBlockScore(block, artistAnswers);
       } else {
         score = getSubcatScore(v.id);
         if (score === null) return null;
@@ -3524,16 +3523,18 @@ export default function App() {
         onBack={() => setPhase("song-home")}
         onSave={(updated) => {
           setCurrentSong(s => ({ ...s, data: updated }));
-          // Persist to artist record in Firebase
-          if (updated?.id && (updated?.linkedArtist?.id || artistData?.id)) {
-            const targetId = updated?.linkedArtist?.id || artistData?.id;
-            const target = getArtists().find(a => a.id === targetId);
-            if (target) {
-              const projects = (target.projects || []).map(p =>
-                p.id === updated.id ? { ...p, ...updated } : p
-              );
-              saveOneArtist({ ...target, projects });
-            }
+          // Find the artist by any available link
+          const targetId = updated?.linkedArtist?.id || updated?.artistId || artistData?.id;
+          const allArtists = getArtists();
+          let target = targetId ? allArtists.find(a => a.id === targetId) : null;
+          if (!target && updated?.id) {
+            target = allArtists.find(a => (a.projects||[]).some(p => p.id === updated.id));
+          }
+          if (target) {
+            const projects = (target.projects || []).map(p =>
+              p.id === updated.id ? { ...p, ...updated } : p
+            );
+            saveOneArtist({ ...target, projects });
           }
           setPhase("song-home");
         }}
@@ -3551,8 +3552,12 @@ export default function App() {
         onEdit={() => setPhase("project-edit")}
         onResult={() => setPhase("song-result")}
         onBlock={(blockId) => {
+          // blockId comes from vertex id e.g. "social", "dsps" etc
           const idx = SONG_BLOCKS.findIndex(b => b.id === blockId);
-          if (idx === -1) return;
+          if (idx === -1) {
+            console.warn("Block not found:", blockId, SONG_BLOCKS.map(b=>b.id));
+            return;
+          }
           setCurrentBlockIdx(idx);
           setPhase("song-block-home");
         }}
