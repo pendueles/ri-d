@@ -989,7 +989,7 @@ function ResetButton({ onReset }) {
     </button>
   );
 }
-function SwipeCard({ question, onAnswer, currentIndex, total, answers, blockLabel, subcatLabel, phase, phaseName, photo, onHome }) {
+function SwipeCard({ question, onAnswer, currentIndex, total, answers, blockLabel, subcatLabel, phase, phaseName, photo, onHome, onGoHome, onGoBlock }) {
   const [showHint, setShowHint] = useState(false);
   const hint = QUESTION_HINTS && QUESTION_HINTS[question.id];
   const cardRef = useRef(null);
@@ -1070,12 +1070,29 @@ function SwipeCard({ question, onAnswer, currentIndex, total, answers, blockLabe
         <div style={{ height:"100%", width:`${progress}%`, background:"#111", transition:"width 0.3s ease" }}/>
       </div>
 
-      {/* Header */}
+      {/* Header — breadcrumb navigation */}
       <div style={{ padding:"20px 20px 0", paddingTop:"max(20px, env(safe-area-inset-top, 20px))", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
         <button onClick={onHome} style={{ background:"transparent", border:"none", color:"#aaa", fontFamily:"Arial,sans-serif", fontSize:"13px", cursor:"pointer", padding:0 }}>
           {onHome ? "← Volver" : ""}
         </button>
-        <div style={{ fontFamily:"Arial,sans-serif", fontSize:"11px", color:"#bbb", letterSpacing:"0.08em", textTransform:"uppercase" }}>{subcatLabel}</div>
+        {/* Breadcrumb: Artista/Canción › Bloque › Subcat */}
+        <div style={{ display:"flex", alignItems:"center", gap:"4px", flex:1, justifyContent:"center" }}>
+          {phaseName && (
+            <button onClick={onGoHome} style={{ background:"transparent", border:"none", fontFamily:"Arial,sans-serif", fontSize:"11px", fontWeight:"700", color: onGoHome ? "#E8151B" : "#bbb", letterSpacing:"0.06em", textTransform:"uppercase", cursor: onGoHome ? "pointer" : "default", padding:"2px 4px", borderRadius:"6px" }}>
+              {phaseName}
+            </button>
+          )}
+          {blockLabel && phaseName && <span style={{ color:"#ccc", fontSize:"10px" }}>›</span>}
+          {blockLabel && (
+            <button onClick={onGoBlock} style={{ background:"transparent", border:"none", fontFamily:"Arial,sans-serif", fontSize:"11px", fontWeight:"700", color: onGoBlock ? "#111" : "#bbb", letterSpacing:"0.06em", textTransform:"uppercase", cursor: onGoBlock ? "pointer" : "default", padding:"2px 4px", borderRadius:"6px" }}>
+              {blockLabel}
+            </button>
+          )}
+          {subcatLabel && blockLabel && <span style={{ color:"#ccc", fontSize:"10px" }}>›</span>}
+          {subcatLabel && (
+            <span style={{ fontFamily:"Arial,sans-serif", fontSize:"11px", color:"#bbb", letterSpacing:"0.06em", textTransform:"uppercase" }}>{subcatLabel}</span>
+          )}
+        </div>
         <div style={{ fontFamily:"Arial,sans-serif", fontSize:"13px", fontWeight:"700", color:"#aaa" }}>{currentIndex}/{total}</div>
       </div>
 
@@ -1306,7 +1323,7 @@ function ResultScreen({ title, subtitle, score, blocks, answers, photo, onContin
 // ═══════════════════════════════════════════
 // BLOCK HOME SCREEN — sub-hexagon for block subcats
 // ═══════════════════════════════════════════
-function BlockHomeScreen({ block, artistAnswers, onSubcat, onBack, artistName }) {
+function BlockHomeScreen({ block, artistAnswers, onSubcat, onBack, artistName, onGoHome }) {
   const t = theme(isDark());
   const rad = (deg) => deg * Math.PI / 180;
 
@@ -1414,9 +1431,11 @@ function BlockHomeScreen({ block, artistAnswers, onSubcat, onBack, artistName })
 
   return (
     <div style={{minHeight:'100dvh', background:t.bg, display:'flex', flexDirection:'column'}}>
-      {/* Artist name */}
+      {/* Breadcrumb header */}
       <div style={{padding:'32px 24px 0', paddingTop:'max(32px,env(safe-area-inset-top,32px))', textAlign:'center'}}>
-        <div style={{fontFamily:'Arial,sans-serif', fontSize:'13px', fontWeight:'600', color:t.text3, letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:'4px'}}>{artistName}</div>
+        <button onClick={onGoHome} style={{background:'transparent', border:'none', cursor: onGoHome ? 'pointer' : 'default', padding:'2px 8px', borderRadius:'8px', fontFamily:'Arial,sans-serif', fontSize:'13px', fontWeight:'600', color: onGoHome ? '#E8151B' : t.text3, letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:'4px', display:'block', margin:'0 auto 4px'}}>
+          {artistName}
+        </button>
         <div style={{fontFamily:'Arial,sans-serif', fontSize:'28px', fontWeight:'700', color:t.text}}>{block.label}</div>
       </div>
 
@@ -1489,7 +1508,7 @@ function BlockHomeScreen({ block, artistAnswers, onSubcat, onBack, artistName })
   );
 }
 
-function ArtistHomeScreen({ artistData, artistAnswers, onBlock, onResult, onBack, profile, onCatalogue, onNewProject, onEdit }) {
+function ArtistHomeScreen({ artistData, artistAnswers, onBlock, onResult, onBack, profile, onCatalogue, onNewProject, onEdit, onPending }) {
   const t = theme(isDark());
 
   // Top=Resultado, top-right=DSPs, bot-right=Social,
@@ -1519,7 +1538,8 @@ function ArtistHomeScreen({ artistData, artistAnswers, onBlock, onResult, onBack
 
   // Data polygon — only for blocks with answers
   const dataPolygon = (() => {
-    const pts = vertices.map(v => {
+    const sorted = [...vertices].sort((a, b) => a.angle - b.angle);
+    const pts = sorted.map(v => {
       const score = getBlockScore(v.id);
       if (score === null) return null;
       const pct = Math.max(0.01, score / 100);
@@ -1626,6 +1646,10 @@ function ArtistHomeScreen({ artistData, artistAnswers, onBlock, onResult, onBack
             </button>
           )}
         </div>
+        <button onClick={onPending}
+          style={{display:'block', width:'100%', padding:'15px', background:t.bg2, border:`1.5px solid ${t.border}`, borderRadius:'14px', fontFamily:'Arial,sans-serif', fontSize:'15px', fontWeight:'600', color:t.text, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:'8px'}}>
+          <span style={{fontSize:'16px'}}>📋</span> Tareas pendientes
+        </button>
         <button onClick={onBack}
           style={{display:'block', width:'100%', padding:'15px', background:'transparent', border:`1.5px solid ${t.border}`, borderRadius:'14px', fontFamily:'Arial,sans-serif', fontSize:'15px', fontWeight:'600', color:t.text2, cursor:'pointer'}}>
           ← Roster
@@ -2100,9 +2124,12 @@ function ProjectListScreen({ profile, onBack, onCreate, onSelect }) {
                   <div style={{ fontFamily:"Arial,sans-serif", fontSize:"16px", fontWeight:"700", color:t.text, marginBottom:"2px" }}>{p.title || "Sin título"}</div>
                   <div style={{ fontFamily:"Arial,sans-serif", fontSize:"12px", color:t.text2 }}>{p.artistName}{p.date ? ` · ${p.date}` : ""}</div>
                 </div>
-                {p.score !== undefined && (
-                  <div style={{ fontFamily:"Arial,sans-serif", fontSize:"20px", fontWeight:"700", color:scoreColor(p.score), flexShrink:0 }}>{Math.round(p.score)}</div>
-                )}
+                {(() => {
+                  const liveScore = p.score !== undefined ? p.score : (p.answers && Object.keys(p.answers).length > 0 ? Math.round(calcTotalScore(SONG_BLOCKS, p.answers) * 10) / 10 : null);
+                  return liveScore !== null ? (
+                    <div style={{ fontFamily:"Arial,sans-serif", fontSize:"20px", fontWeight:"700", color:scoreColor(liveScore), flexShrink:0 }}>{liveScore}</div>
+                  ) : null;
+                })()}
                 <div style={{ color:t.text3, fontSize:"18px" }}>›</div>
               </button>
             ))}
@@ -2376,7 +2403,7 @@ function ProjectForm({ profile, songNum, onBack, onSubmit, prefilledArtist }) {
 // ═══════════════════════════════════════════
 // PROJECT HOME SCREEN — hexagon nav for songs
 // ═══════════════════════════════════════════
-function ProjectHomeScreen({ songData, songAnswers, onBlock, onResult, onBack, onEdit }) {
+function ProjectHomeScreen({ songData, songAnswers, onBlock, onResult, onBack, onEdit, onPending }) {
   const t = theme(isDark());
   const rad = (deg) => deg * Math.PI / 180;
 
@@ -2412,7 +2439,8 @@ function ProjectHomeScreen({ songData, songAnswers, onBlock, onResult, onBack, o
   }));
 
   const dataPolygon = (() => {
-    const pts = vertices.map(v => {
+    const sorted = [...vertices].sort((a, b) => a.angle - b.angle);
+    const pts = sorted.map(v => {
       const score = getBlockScore(v.id);
       if (score === null) return null;
       const pct = Math.max(0.01, score / 100);
@@ -2495,11 +2523,101 @@ function ProjectHomeScreen({ songData, songAnswers, onBlock, onResult, onBack, o
       </div>
 
       {/* Back button */}
-      <div style={{padding:'16px 32px', paddingBottom:'max(24px,env(safe-area-inset-bottom,24px))'}}>
+      <div style={{padding:'12px 32px', paddingBottom:'max(24px,env(safe-area-inset-bottom,24px))', display:'flex', flexDirection:'column', gap:'10px'}}>
+        <button onClick={onPending}
+          style={{display:'block', width:'100%', padding:'15px', background:t.bg2, border:`1.5px solid ${t.border}`, borderRadius:'14px', fontFamily:'Arial,sans-serif', fontSize:'15px', fontWeight:'600', color:t.text, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:'8px'}}>
+          <span style={{fontSize:'16px'}}>📋</span> Tareas pendientes
+        </button>
         <button onClick={onBack}
           style={{display:'block', width:'100%', padding:'17px', background:'transparent', border:`1.5px solid ${t.border}`, borderRadius:'14px', fontFamily:'Arial,sans-serif', fontSize:'16px', fontWeight:'600', color:t.text2, cursor:'pointer'}}>
           ← Catálogo
         </button>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════
+// PENDING TASKS SCREEN
+// ═══════════════════════════════════════════
+function PendingTasksScreen({ blocks, answers, title, onBack, onGoToQuestion }) {
+  const t = theme(isDark());
+
+  // Build pending tasks grouped by block > subcat
+  const groups = blocks.map(block => {
+    const subcats = block.subcats.map(sub => {
+      const pending = sub.items.filter(item => answers[item.id] === false);
+      return { ...sub, pending };
+    }).filter(s => s.pending.length > 0);
+    return { ...block, subcats };
+  }).filter(b => b.subcats.length > 0);
+
+  const totalPending = groups.reduce((acc, b) => acc + b.subcats.reduce((a, s) => a + s.pending.length, 0), 0);
+
+  // Build a flat index map: itemId → question index
+  const questionIndex = {};
+  let idx = 0;
+  blocks.forEach(block => {
+    block.subcats.forEach(sub => {
+      sub.items.forEach(item => {
+        questionIndex[item.id] = idx++;
+      });
+    });
+  });
+
+  return (
+    <div style={{minHeight:'100dvh', background:t.bg, display:'flex', flexDirection:'column'}}>
+      <div style={{padding:'16px 20px', paddingTop:'max(16px,env(safe-area-inset-top,16px))', display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:`1px solid ${t.border}`}}>
+        <button onClick={onBack} style={{background:'transparent', border:'none', color:t.text2, fontFamily:'Arial,sans-serif', fontSize:'15px', cursor:'pointer', padding:0}}>← Volver</button>
+        <div style={{textAlign:'center'}}>
+          <div style={{fontFamily:'Arial,sans-serif', fontSize:'15px', fontWeight:'700', color:t.text}}>Tareas pendientes</div>
+          <div style={{fontFamily:'Arial,sans-serif', fontSize:'11px', color:t.text3}}>{title}</div>
+        </div>
+        <div style={{fontFamily:'Arial,sans-serif', fontSize:'12px', fontWeight:'700', color:'#E8151B'}}>{totalPending}</div>
+      </div>
+
+      <div style={{flex:1, overflowY:'auto', WebkitOverflowScrolling:'touch', padding:'16px 20px'}}>
+        {groups.length === 0 ? (
+          <div style={{display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:'60vh', textAlign:'center'}}>
+            <div style={{fontSize:'56px', marginBottom:'16px'}}>✅</div>
+            <div style={{fontFamily:'Arial,sans-serif', fontSize:'22px', fontWeight:'700', color:t.text, marginBottom:'8px'}}>Todo al día</div>
+            <div style={{fontFamily:'Arial,sans-serif', fontSize:'14px', color:t.text2}}>No hay tareas pendientes</div>
+          </div>
+        ) : (
+          <div style={{display:'flex', flexDirection:'column', gap:'20px'}}>
+            {groups.map(block => (
+              <div key={block.id}>
+                {/* Block header */}
+                <div style={{fontFamily:'Arial,sans-serif', fontSize:'11px', fontWeight:'700', color:'#E8151B', letterSpacing:'0.12em', textTransform:'uppercase', marginBottom:'10px'}}>
+                  {block.label}
+                </div>
+                <div style={{display:'flex', flexDirection:'column', gap:'8px'}}>
+                  {block.subcats.map(sub => (
+                    <div key={sub.id}>
+                      {/* Subcat label */}
+                      <div style={{fontFamily:'Arial,sans-serif', fontSize:'11px', fontWeight:'600', color:t.text3, letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:'6px', paddingLeft:'4px'}}>
+                        {sub.label}
+                      </div>
+                      {/* Tasks */}
+                      {sub.pending.map(item => (
+                        <button key={item.id}
+                          onClick={() => onGoToQuestion(questionIndex[item.id])}
+                          style={{display:'flex', alignItems:'center', gap:'12px', width:'100%', padding:'14px 14px', background:t.card, border:`1px solid ${t.border}`, borderRadius:'12px', cursor:'pointer', textAlign:'left', marginBottom:'6px'}}>
+                          <div style={{width:'22px', height:'22px', borderRadius:'50%', border:`2px solid #E8151B`, background:'#E8151B18', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0}}>
+                            <span style={{color:'#E8151B', fontSize:'10px', fontWeight:'700'}}>✗</span>
+                          </div>
+                          <div style={{flex:1, fontFamily:'Arial,sans-serif', fontSize:'13px', color:t.text, lineHeight:'1.4'}}>{item.q}</div>
+                          <div style={{fontFamily:'Arial,sans-serif', fontSize:'11px', fontWeight:'700', color:t.text3, flexShrink:0}}>{item.w}pts</div>
+                          <div style={{color:t.text3, fontSize:'16px'}}>›</div>
+                        </button>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -2853,9 +2971,12 @@ function ArtistCatalogueScreen({ artistData, profile, onBack, onNewProject, onOp
                     <div style={{fontFamily:'Arial,sans-serif', fontSize:'16px', fontWeight:'700', color:t.text, marginBottom:'2px'}}>{p.title || 'Sin título'}</div>
                     <div style={{fontFamily:'Arial,sans-serif', fontSize:'12px', color:t.text2}}>{p.date || 'Sin fecha'}</div>
                   </div>
-                  {p.score !== undefined && !editMode && (
-                    <div style={{fontFamily:'Arial,sans-serif', fontSize:'20px', fontWeight:'700', color:scoreColor(p.score), flexShrink:0}}>{Math.round(p.score)}</div>
-                  )}
+                  {!editMode && (() => {
+                    const liveScore = p.score !== undefined ? p.score : (p.answers && Object.keys(p.answers).length > 0 ? Math.round(calcTotalScore(SONG_BLOCKS, p.answers) * 10) / 10 : null);
+                    return liveScore !== null ? (
+                      <div style={{fontFamily:'Arial,sans-serif', fontSize:'20px', fontWeight:'700', color:scoreColor(liveScore), flexShrink:0}}>{liveScore}</div>
+                    ) : null;
+                  })()}
                   {!editMode && <div style={{color:t.text3, fontSize:'18px'}}>›</div>}
                 </button>
               );
@@ -3677,22 +3798,40 @@ export default function App() {
         {errorBanner}
         <ProjectHomeScreen
           songData={currentSong?.data}
-        songAnswers={currentSong?.answers || {}}
-        onBack={() => setPhase("welcome")}
-        onEdit={() => setPhase("project-edit")}
-        onResult={() => setPhase("song-result")}
-        onBlock={(blockId) => {
-          // blockId comes from vertex id e.g. "social", "dsps" etc
-          const idx = SONG_BLOCKS.findIndex(b => b.id === blockId);
-          if (idx === -1) {
-            console.warn("Block not found:", blockId, SONG_BLOCKS.map(b=>b.id));
-            return;
+          songAnswers={currentSong?.answers || {}}
+          onBack={() => setPhase("welcome")}
+          onEdit={() => setPhase("project-edit")}
+          onResult={() => setPhase("song-result")}
+          onPending={() => setPhase("song-pending")}
+          onBlock={(blockId) => {
+            const idx = SONG_BLOCKS.findIndex(b => b.id === blockId);
+            if (idx === -1) { console.warn("Block not found:", blockId); return; }
+            setCurrentBlockIdx(idx);
+            setPhase("song-block-home");
+          }}
+        />
+      </>
+    );
+  }
+
+  // SONG PENDING TASKS
+  if (phase === "song-pending") {
+    return (
+      <PendingTasksScreen
+        blocks={SONG_BLOCKS}
+        answers={currentSong?.answers || {}}
+        title={currentSong?.data?.title || "Proyecto"}
+        onBack={() => setPhase("song-home")}
+        onGoToQuestion={(qIdx) => {
+          setSongQIdx(qIdx);
+          let count = 0;
+          for (let i = 0; i < SONG_BLOCKS.length; i++) {
+            SONG_BLOCKS[i].subcats.forEach(s => { count += s.items.length; });
+            if (qIdx < count) { setCurrentBlockIdx(i); break; }
           }
-          setCurrentBlockIdx(idx);
-          setPhase("song-block-home");
+          setPhase("song-questions");
         }}
       />
-      </>
     );
   }
 
@@ -3706,6 +3845,7 @@ export default function App() {
         artistAnswers={currentSong?.answers || {}}
         artistName={currentSong?.data?.title || "Proyecto"}
         onBack={() => setPhase("song-home")}
+        onGoHome={() => setPhase("song-home")}
         onSubcat={(subcatId) => {
           let startIdx = 0;
           for (const b of SONG_BLOCKS) {
@@ -3741,6 +3881,7 @@ export default function App() {
         artistAnswers={artistAnswers}
         artistName={artistData.name}
         onBack={() => setPhase("artist-home")}
+        onGoHome={() => setPhase("artist-home")}
         onSubcat={(subcatId) => {
           let startIdx = 0;
           for (const b of ARTIST_BLOCKS) {
@@ -3791,6 +3932,7 @@ export default function App() {
         onResult={() => setPhase("artist-result")}
         onEdit={() => setPhase("artist-edit")}
         onCatalogue={() => setPhase("artist-catalogue")}
+        onPending={() => setPhase("artist-pending")}
         onNewProject={() => {
           setCurrentSong({ data: { artistName: artistData.name, linkedArtist: artistData }, answers: {} });
           setSongQIdx(0);
@@ -3801,6 +3943,28 @@ export default function App() {
           if (idx === -1) return;
           setCurrentBlockIdx(idx);
           setPhase("block-home");
+        }}
+      />
+    );
+  }
+
+  // ARTIST PENDING TASKS
+  if (phase === "artist-pending") {
+    return (
+      <PendingTasksScreen
+        blocks={ARTIST_BLOCKS}
+        answers={artistAnswers}
+        title={artistData.name}
+        onBack={() => setPhase("artist-home")}
+        onGoToQuestion={(qIdx) => {
+          setArtistQIdx(qIdx);
+          // Set current block based on question index
+          let count = 0;
+          for (let i = 0; i < ARTIST_BLOCKS.length; i++) {
+            ARTIST_BLOCKS[i].subcats.forEach(s => { count += s.items.length; });
+            if (qIdx < count) { setCurrentBlockIdx(i); break; }
+          }
+          setPhase("artist-questions");
         }}
       />
     );
@@ -3843,9 +4007,11 @@ export default function App() {
         blockLabel={q.blockLabel}
         subcatLabel={q.subcatLabel}
         phase="artist"
-        phaseName={`Artista · ${artistData.name || ""}`}
+        phaseName={artistData.name || "Artista"}
         photo={artistData.photo}
         onHome={() => setPhase("block-home")}
+        onGoHome={() => setPhase("artist-home")}
+        onGoBlock={() => setPhase("block-home")}
       />
     );
   }
@@ -3954,9 +4120,11 @@ export default function App() {
         blockLabel={q.blockLabel}
         subcatLabel={q.subcatLabel}
         phase="song"
-        phaseName={`Catálogo · ${currentSong?.data?.title || ""}`}
+        phaseName={currentSong?.data?.title || "Canción"}
         photo={currentSong?.data?.photo}
         onHome={() => setPhase("song-block-home")}
+        onGoHome={() => setPhase("song-home")}
+        onGoBlock={() => setPhase("song-block-home")}
       />
     );
   }
