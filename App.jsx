@@ -1670,22 +1670,27 @@ function ProfileSelect({ onSelect }) {
       onSelect({ type: 'admin', name: 'Admin' }); return;
     }
 
-    // Label users
-    const labelUsers = getLabelUsers();    if (labelUsers[n]) {
-      onSelect({ type: 'label', name: n }); return;
+    // Label users — case-insensitive
+    const labelUsers = getLabelUsers();
+    const labelMatch = Object.keys(labelUsers).find(k => k.toLowerCase() === n.toLowerCase());
+    if (labelMatch) {
+      onSelect({ type: 'label', name: labelMatch }); return;
     }
 
     // Management — check mgmt users store AND artists
+    const allArtists = getArtists();
     const mgmtUsers = getMgmtUsers();
-    if (mgmtUsers[n]) { onSelect({ type: 'management', name: n }); return; }
-    const isManager = artists.some(a => a.management && a.management.split(';').map(m => m.trim().toLowerCase()).includes(n.toLowerCase()));
+    const mgmtMatch = Object.keys(mgmtUsers).find(k => k.toLowerCase() === n.toLowerCase());
+    if (mgmtMatch) { onSelect({ type: 'management', name: mgmtMatch }); return; }
+    const isManager = allArtists.some(a => a.management && a.management.split(';').map(m => m.trim().toLowerCase()).includes(n.toLowerCase()));
     if (isManager) { onSelect({ type: 'management', name: n }); return; }
 
     // Artist — check artist users store first, then artists DB
     const artistUsers = getArtistUsers();
-    const isArtist = artistUsers[n] || artists.some(a => a.name && a.name.toLowerCase() === n.toLowerCase());
-    if (isArtist) {
-      onSelect({ type: 'artist', name: n }); return;
+    const artistUserMatch = Object.keys(artistUsers).find(k => k.toLowerCase() === n.toLowerCase());
+    const artistMatch = allArtists.find(a => a.name && a.name.toLowerCase() === n.toLowerCase());
+    if (artistUserMatch || artistMatch) {
+      onSelect({ type: 'artist', name: artistMatch?.name || artistUserMatch || n }); return;
     }
 
     setError('No te encontramos. Comprueba tu nombre.');
