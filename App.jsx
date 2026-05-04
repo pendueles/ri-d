@@ -1270,11 +1270,20 @@ function BlockHomeScreen({ block, artistAnswers, onSubcat, onBack, artistName })
   }));
   const hasAnyData = vertices.some(v => v.id !== 'result' && getSubcatScore(v.id) !== null);
   const dataPolygon = (() => {
-    const pts = vertices.filter(v => v.id !== 'result' && getSubcatScore(v.id) !== null).map(v => {
-      const score = getSubcatScore(v.id);
+    const pts = vertices.map(v => {
+      let score;
+      if (v.id === 'result') {
+        // total score for the block
+        const allAnswered = block.subcats.some(s => s.items.some(i => answers[i.id] !== undefined));
+        if (!allAnswered) return null;
+        score = calcBlockScore(block, answers);
+      } else {
+        score = getSubcatScore(v.id);
+        if (score === null) return null;
+      }
       const pct = Math.max(0.01, score / 100);
       return { x: cx + R * pct * Math.cos(rad(v.angle)), y: cy + R * pct * Math.sin(rad(v.angle)) };
-    });
+    }).filter(Boolean);
     if (pts.length < 2) return null;
     return pts.map((p,i) => `${i===0?'M':'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ') + ' Z';
   })();
@@ -1300,7 +1309,7 @@ function BlockHomeScreen({ block, artistAnswers, onSubcat, onBack, artistName })
               <line key={i} x1={cx} y1={cy} x2={p.x.toFixed(1)} y2={p.y.toFixed(1)} stroke={t.border} strokeWidth="1"/>
             ))}
             {hasAnyData && dataPolygon && <path d={dataPolygon} fill="rgba(232,21,27,0.15)" stroke="#E8151B" strokeWidth="2" strokeLinejoin="round"/>}
-            {vertices.filter(v => v.id !== 'result').map(v => {
+            {vertices.map(v => {
               const score = getSubcatScore(v.id);
               if (!score) return null;
               const pct = score / 100;
@@ -1387,13 +1396,10 @@ function ArtistHomeScreen({ artistData, artistAnswers, onBlock, onResult, onBack
   // Data polygon — only for blocks with answers
   const dataPolygon = (() => {
     const pts = vertices.map(v => {
-      if (v.id === 'result') return null;
       const score = getBlockScore(v.id);
-      const pct = score !== null ? score / 100 : 0;
-      return {
-        x: cx + R * pct * Math.cos(rad(v.angle)),
-        y: cy + R * pct * Math.sin(rad(v.angle)),
-      };
+      if (score === null) return null;
+      const pct = Math.max(0.01, score / 100);
+      return { x: cx + R * pct * Math.cos(rad(v.angle)), y: cy + R * pct * Math.sin(rad(v.angle)) };
     }).filter(Boolean);
     if (pts.length === 0) return null;
     return pts.map((p,i) => `${i===0?'M':'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ') + ' Z';
@@ -1443,7 +1449,7 @@ function ArtistHomeScreen({ artistData, artistAnswers, onBlock, onResult, onBack
             {dataPolygon && (
               <path d={dataPolygon} fill="rgba(232,21,27,0.15)" stroke="#E8151B" strokeWidth="2" strokeLinejoin="round"/>
             )}
-            {vertices.filter(v => v.id !== 'result').map(v => {
+            {vertices.map(v => {
               const score = getBlockScore(v.id);
               if (score === null || score === 0) return null;
               const pct = score / 100;
@@ -1720,13 +1726,14 @@ function ProfileSelect({ onSelect }) {
 // ═══════════════════════════════════════════
 // ARTIST LIST SCREEN
 // ═══════════════════════════════════════════
-function ArtistListScreen({ profile, onBack, onSelect, onCreate }) {
+function ArtistListScreen({ profile, onBack, onSelect, onCreate, liveArtists }) {
   const t = theme(isDark());
+  useFirebaseStore(); // re-render on Firebase changes
   const [editMode, setEditMode] = useState(false);
   const [selected, setSelected] = useState([]);
-  const [editingManagement, setEditingManagement] = useState(null); // artist being edited
+  const [editingManagement, setEditingManagement] = useState(null);
   const [mgmtInput, setMgmtInput] = useState('');
-  const allArtists = getArtists();
+  const allArtists = liveArtists || getArtists();
   const artists = profile.type === 'admin'
     ? allArtists
     : profile.type === 'label'
@@ -2222,7 +2229,7 @@ function ProjectForm({ profile, songNum, onBack, onSubmit, prefilledArtist }) {
 // ═══════════════════════════════════════════
 // PROJECT HOME SCREEN — hexagon nav for songs
 // ═══════════════════════════════════════════
-function ProjectHomeScreen({ songData, songAnswers, onBlock, onResult, onBack }) {
+function ProjectHomeScreen({ songData, songAnswers, onBlock, onResult, onBack, onEdit }) {
   const t = theme(isDark());
   const rad = (deg) => deg * Math.PI / 180;
 
@@ -2258,10 +2265,12 @@ function ProjectHomeScreen({ songData, songAnswers, onBlock, onResult, onBack })
   }));
 
   const dataPolygon = (() => {
-    const pts = vertices.filter(v => v.id !== 'result' && getBlockScore(v.id) !== null).map(v => {
-      const pct = Math.max(0.01, getBlockScore(v.id) / 100);
+    const pts = vertices.map(v => {
+      const score = getBlockScore(v.id);
+      if (score === null) return null;
+      const pct = Math.max(0.01, score / 100);
       return { x: cx + R * pct * Math.cos(rad(v.angle)), y: cy + R * pct * Math.sin(rad(v.angle)) };
-    });
+    }).filter(Boolean);
     if (pts.length < 2) return null;
     return pts.map((p,i) => `${i===0?'M':'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ') + ' Z';
   })();
@@ -2271,10 +2280,18 @@ function ProjectHomeScreen({ songData, songAnswers, onBlock, onResult, onBack })
       {/* Title */}
       <div style={{padding:'32px 24px 0', paddingTop:'max(32px,env(safe-area-inset-top,32px))', textAlign:'center'}}>
         <div style={{fontFamily:'Arial,sans-serif', fontSize:'13px', fontWeight:'600', color:t.text3, letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:'4px'}}>Catálogo</div>
-        <div style={{fontFamily:'Arial,sans-serif', fontSize:'28px', fontWeight:'700', color:t.text}}>{songData?.title || 'Sin título'}</div>
-        {songData?.artistName && (
-          <div style={{fontFamily:'Arial,sans-serif', fontSize:'14px', color:t.text2, marginTop:'4px'}}>{songData.artistName}</div>
-        )}
+        <button onClick={onEdit} style={{background:'transparent', border:'none', cursor:'pointer', padding:'4px 12px', borderRadius:'12px', display:'inline-flex', alignItems:'center', gap:'8px'}}>
+          {songData?.photo && (
+            <img src={songData.photo} alt="" style={{width:'32px', height:'32px', borderRadius:'8px', objectFit:'cover', flexShrink:0}}/>
+          )}
+          <div style={{textAlign:'left'}}>
+            <div style={{fontFamily:'Arial,sans-serif', fontSize:'28px', fontWeight:'700', color:t.text, lineHeight:1}}>{songData?.title || 'Sin título'}</div>
+            {songData?.artistName && (
+              <div style={{fontFamily:'Arial,sans-serif', fontSize:'14px', color:t.text2, marginTop:'2px'}}>{songData.artistName}</div>
+            )}
+          </div>
+          <span style={{fontSize:'14px', color:t.text3}}>✎</span>
+        </button>
       </div>
 
       {/* Hexagon */}
@@ -2290,7 +2307,7 @@ function ProjectHomeScreen({ songData, songAnswers, onBlock, onResult, onBack })
               <line key={i} x1={cx} y1={cy} x2={p.x.toFixed(1)} y2={p.y.toFixed(1)} stroke={t.border} strokeWidth="1"/>
             ))}
             {dataPolygon && <path d={dataPolygon} fill="rgba(232,21,27,0.15)" stroke="#E8151B" strokeWidth="2" strokeLinejoin="round"/>}
-            {vertices.filter(v => v.id !== 'result').map(v => {
+            {vertices.map(v => {
               const score = getBlockScore(v.id);
               if (!score) return null;
               const pct = score / 100;
@@ -2589,11 +2606,21 @@ function TotalSummaryScreen({ blocks, answers, title, subtitle, photo, onContinu
   );
 }
 
+// Hook to subscribe to Firebase store changes and force re-render
+function useFirebaseStore() {
+  const [, forceUpdate] = useState(0);
+  useEffect(() => {
+    const unsub = subscribeStore(() => forceUpdate(n => n + 1));
+    return unsub;
+  }, []);
+}
+
 // ═══════════════════════════════════════════
 // ARTIST CATALOGUE SCREEN
 // ═══════════════════════════════════════════
-function ArtistCatalogueScreen({ artistData, profile, onBack, onNewProject, onOpenProject }) {
+function ArtistCatalogueScreen({ artistData, profile, onBack, onNewProject, onOpenProject, liveArtists }) {
   const t = theme(isDark());
+  useFirebaseStore(); // re-render on Firebase changes
   const [editMode, setEditMode] = useState(false);
   const [selected, setSelected] = useState([]);
 
@@ -2706,11 +2733,11 @@ function ArtistCatalogueScreen({ artistData, profile, onBack, onNewProject, onOp
 // ═══════════════════════════════════════════
 // CLIENTS LIST SCREEN — all managers
 // ═══════════════════════════════════════════
-function ClientsListScreen({ onBack, onSelectArtist }) {
+function ClientsListScreen({ onBack, onSelectArtist, liveArtists }) {
   const t = theme(isDark());
 
   // Collect all unique managers from all artists
-  const allArtists = getArtists();
+  const allArtists = liveArtists || getArtists();
   const clientMap = {};
   allArtists.forEach(a => {
     if (!a.management) return;
@@ -3032,11 +3059,116 @@ function ArtistEditScreen({ artistData, onBack, onSave }) {
   );
 }
 
+// ═══════════════════════════════════════════
+// PROJECT EDIT SCREEN
+// ═══════════════════════════════════════════
+function ProjectEditScreen({ songData, onBack, onSave }) {
+  const t = theme(isDark());
+  const [title, setTitle] = useState(songData?.title || '');
+  const [date, setDate] = useState(songData?.date || '');
+  const [participants, setParticipants] = useState(songData?.participants || '');
+  const [photo, setPhoto] = useState(songData?.photo || null);
+  const fileRef = useRef();
+
+  const handleFile = (e) => {
+    const f = e.target.files[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = ev => setPhoto(ev.target.result);
+    reader.readAsDataURL(f);
+  };
+
+  const handleSave = () => {
+    if (!title.trim()) return;
+    onSave({ ...songData, title: title.trim(), date, participants, photo });
+  };
+
+  return (
+    <div style={{minHeight:'100dvh', background:t.bg, display:'flex', flexDirection:'column'}}>
+      <div style={{padding:'16px 20px', paddingTop:'max(16px,env(safe-area-inset-top,16px))', display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:`1px solid ${t.border}`}}>
+        <button onClick={onBack} style={{background:'transparent', border:'none', color:t.text2, fontFamily:'Arial,sans-serif', fontSize:'15px', cursor:'pointer', padding:0}}>← Cancelar</button>
+        <div style={{fontFamily:'Arial,sans-serif', fontSize:'15px', fontWeight:'700', color:t.text}}>Editar proyecto</div>
+        <button onClick={handleSave} disabled={!title.trim()} style={{background:'transparent', border:'none', color: title.trim() ? t.accent : t.text3, fontFamily:'Arial,sans-serif', fontSize:'15px', fontWeight:'700', cursor: title.trim() ? 'pointer' : 'default', padding:0}}>Guardar</button>
+      </div>
+
+      <div style={{flex:1, overflowY:'auto', WebkitOverflowScrolling:'touch', padding:'32px 24px'}}>
+
+        {/* Photo */}
+        <div style={{display:'flex', justifyContent:'center', marginBottom:'36px'}}>
+          <div onClick={() => fileRef.current.click()}
+            style={{width:'90px', height:'90px', borderRadius:'14px', background: photo ? 'transparent' : t.bg2, border:`1.5px dashed ${t.border}`, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', overflow:'hidden'}}>
+            {photo
+              ? <img src={photo} alt="" style={{width:'100%', height:'100%', objectFit:'cover'}}/>
+              : <span style={{fontSize:'28px'}}>🎵</span>
+            }
+          </div>
+          <input ref={fileRef} type="file" accept="image/*" style={{display:'none'}} onChange={handleFile}/>
+        </div>
+
+        {/* Title */}
+        <div style={{marginBottom:'28px'}}>
+          <div style={{fontFamily:'Arial,sans-serif', fontSize:'11px', fontWeight:'700', color:t.text3, textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:'10px'}}>Título *</div>
+          <input
+            value={title}
+            onChange={e => setTitle(e.target.value)}
+            placeholder="Nombre del proyecto"
+            style={{display:'block', width:'100%', background:'transparent', border:'none', borderBottom:`1.5px solid ${t.border}`, padding:'10px 0', fontFamily:'Arial,sans-serif', fontSize:'22px', fontWeight:'700', color:t.text, outline:'none', WebkitAppearance:'none'}}
+          />
+        </div>
+
+        {/* Artista (read-only) */}
+        {songData?.artistName && (
+          <div style={{marginBottom:'28px'}}>
+            <div style={{fontFamily:'Arial,sans-serif', fontSize:'11px', fontWeight:'700', color:t.text3, textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:'10px'}}>Artista</div>
+            <div style={{fontFamily:'Arial,sans-serif', fontSize:'17px', color:t.text2, padding:'10px 0', borderBottom:`1.5px solid ${t.border}`}}>{songData.artistName}</div>
+          </div>
+        )}
+
+        {/* Release date */}
+        <div style={{marginBottom:'28px'}}>
+          <div style={{fontFamily:'Arial,sans-serif', fontSize:'11px', fontWeight:'700', color:t.text3, textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:'10px'}}>Fecha de lanzamiento</div>
+          <input
+            type="date"
+            value={date}
+            onChange={e => setDate(e.target.value)}
+            style={{display:'block', width:'100%', background:'transparent', border:'none', borderBottom:`1.5px solid ${t.border}`, padding:'10px 0', fontFamily:'Arial,sans-serif', fontSize:'17px', color:t.text, outline:'none', WebkitAppearance:'none'}}
+          />
+        </div>
+
+        {/* Participants */}
+        <div style={{marginBottom:'28px'}}>
+          <div style={{fontFamily:'Arial,sans-serif', fontSize:'11px', fontWeight:'700', color:t.text3, textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:'10px'}}>Participantes</div>
+          <input
+            value={participants}
+            onChange={e => setParticipants(e.target.value)}
+            placeholder="Productores, feats, etc."
+            style={{display:'block', width:'100%', background:'transparent', border:'none', borderBottom:`1.5px solid ${t.border}`, padding:'10px 0', fontFamily:'Arial,sans-serif', fontSize:'17px', color:t.text, outline:'none', WebkitAppearance:'none'}}
+          />
+        </div>
+
+      </div>
+
+      <div style={{padding:'16px 24px', paddingBottom:'max(16px,env(safe-area-inset-bottom,16px))', borderTop:`1px solid ${t.border}`}}>
+        <button onClick={handleSave} disabled={!title.trim()}
+          style={{display:'block', width:'100%', padding:'17px', background: title.trim() ? t.text : t.bg2, color: title.trim() ? t.bg : t.text3, border:'none', borderRadius:'14px', fontFamily:'Arial,sans-serif', fontSize:'17px', fontWeight:'700', cursor: title.trim() ? 'pointer' : 'default', transition:'all 0.2s'}}>
+          Guardar cambios
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const dark = useDarkMode();
   const t = theme(dark);
   const [showSplash, setShowSplash] = useState(true);
-  const [profile, setProfile] = useState(null); // { type, name }
+  const [profile, setProfile] = useState(() => {
+    try { const p = localStorage.getItem('rid_profile'); return p ? JSON.parse(p) : null; } catch(e) { return null; }
+  });
+  const saveProfile = (p) => {
+    try { if (p) localStorage.setItem('rid_profile', JSON.stringify(p)); else localStorage.removeItem('rid_profile'); } catch(e) {}
+    saveProfile(p);
+  };
   const [phase, setPhase] = useState("welcome");
   const [artistData, setArtistData] = useState({});
   const [artistAnswers, setArtistAnswers] = useState({});
@@ -3199,6 +3331,10 @@ export default function App() {
     saveOneArtist({ ...target, projects });
   }
 
+  // ── Derive songs from current artist's Firebase data ──
+  const firebaseArtist = getArtists().find(a => a.id === artistData?.id);
+  const firebaseProjects = firebaseArtist?.projects || [];
+
   function finishCurrentSong(answers) {
     const finalAnswers = answers || currentSong.answers;
     const score = calcTotalScore(SONG_BLOCKS, finalAnswers);
@@ -3223,7 +3359,7 @@ export default function App() {
 
   // PROFILE SELECTION
   if (!profile) return <ProfileSelect onSelect={(p) => {
-    setProfile(p);
+    saveProfile(p);
     if (p.type === 'artist') {
       const artists = getArtists();
       const found = artists.find(a => a.name && a.name.toLowerCase() === p.name.toLowerCase());
@@ -3295,7 +3431,7 @@ export default function App() {
               Continuar sesión guardada
             </button>
           )}
-          <button onClick={() => setProfile(null)} style={{ display:"block", width:"100%", padding:"13px", background:"transparent", color:t.text3, border:"none", borderRadius:"14px", fontFamily:"Arial, sans-serif", fontSize:"13px", cursor:"pointer" }}>
+          <button onClick={() => saveProfile(null)} style={{ display:"block", width:"100%", padding:"13px", background:"transparent", color:t.text3, border:"none", borderRadius:"14px", fontFamily:"Arial, sans-serif", fontSize:"13px", cursor:"pointer" }}>
             Cambiar perfil
           </button>
         </div>
@@ -3306,6 +3442,7 @@ export default function App() {
   // NEW LABEL MANAGER
   if (phase === "clients-list") {
     return <ClientsListScreen
+      liveArtists={getArtists()}
       onBack={() => setPhase("welcome")}
       onSelectArtist={(artist) => {
         setArtistData(artist);
@@ -3345,7 +3482,7 @@ export default function App() {
   if (phase === "artist-list") {
     return (
       <ArtistListScreen
-        key={Date.now()}
+        liveArtists={getArtists()}
         profile={profile}
         onBack={() => setPhase("welcome")}
         onSelect={(artist) => {
@@ -3375,6 +3512,31 @@ export default function App() {
     />;
   }
 
+  // PROJECT EDIT
+  if (phase === "project-edit") {
+    return (
+      <ProjectEditScreen
+        songData={currentSong?.data}
+        onBack={() => setPhase("song-home")}
+        onSave={(updated) => {
+          setCurrentSong(s => ({ ...s, data: updated }));
+          // Persist to artist record in Firebase
+          if (updated?.id && (updated?.linkedArtist?.id || artistData?.id)) {
+            const targetId = updated?.linkedArtist?.id || artistData?.id;
+            const target = getArtists().find(a => a.id === targetId);
+            if (target) {
+              const projects = (target.projects || []).map(p =>
+                p.id === updated.id ? { ...p, ...updated } : p
+              );
+              saveOneArtist({ ...target, projects });
+            }
+          }
+          setPhase("song-home");
+        }}
+      />
+    );
+  }
+
   // SONG HOME — project hexagon
   if (phase === "song-home") {
     return (
@@ -3382,6 +3544,7 @@ export default function App() {
         songData={currentSong?.data}
         songAnswers={currentSong?.answers || {}}
         onBack={() => setPhase("welcome")}
+        onEdit={() => setPhase("project-edit")}
         onResult={() => setPhase("song-result")}
         onBlock={(blockId) => {
           const idx = SONG_BLOCKS.findIndex(b => b.id === blockId);
@@ -3507,7 +3670,8 @@ export default function App() {
   if (phase === "artist-catalogue") {
     return (
       <ArtistCatalogueScreen
-        artistData={artistData}
+        key={getArtists().find(a=>a.id===artistData?.id)?.projects?.length}
+        artistData={getArtists().find(a=>a.id===artistData?.id) || artistData}
         profile={profile}
         onBack={() => setPhase("artist-home")}
         onNewProject={() => {
