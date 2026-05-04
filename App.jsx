@@ -2635,9 +2635,10 @@ function ArtistCatalogueScreen({ artistData, profile, onBack, onNewProject, onOp
   const [selected, setSelected] = useState([]);
 
   const allArtists = getArtists();
-  const linkedProjects = allArtists
-    .flatMap(a => (a.projects || []).map(p => ({ ...p, artistName: a.name, artistPhoto: a.photo, artistId: a.id })))
-    .filter(p => p.artistId === artistData.id || p.artistName?.toLowerCase() === artistData.name?.toLowerCase())
+  // Always read fresh from store — artistData prop may be stale
+  const liveArtist = allArtists.find(a => a.id === artistData?.id) || artistData;
+  const linkedProjects = (liveArtist?.projects || [])
+    .map(p => ({ ...p, artistId: liveArtist.id, artistName: liveArtist.name, artistPhoto: liveArtist.photo }))
     .sort((a, b) => {
       const dateA = a.date ? new Date(a.date) : a.createdAt ? new Date(a.createdAt) : new Date(0);
       const dateB = b.date ? new Date(b.date) : b.createdAt ? new Date(b.createdAt) : new Date(0);
@@ -2651,9 +2652,8 @@ function ArtistCatalogueScreen({ artistData, profile, onBack, onNewProject, onOp
   );
 
   const handleDelete = () => {
-    const target = getArtists().find(a => a.id === artistData.id);
-    if (target) {
-      saveOneArtist({ ...target, projects: (target.projects || []).filter(p => !selected.includes(p.id)) });
+    if (liveArtist) {
+      saveOneArtist({ ...liveArtist, projects: (liveArtist.projects || []).filter(p => !selected.includes(p.id)) });
     }
     setSelected([]);
     setEditMode(false);
@@ -3521,9 +3521,8 @@ export default function App() {
       <ProjectEditScreen
         songData={currentSong?.data}
         onBack={() => setPhase("song-home")}
-        onSave={(updated) => {
+        onSave={async (updated) => {
           setCurrentSong(s => ({ ...s, data: updated }));
-          // Find the artist by any available link
           const targetId = updated?.linkedArtist?.id || updated?.artistId || artistData?.id;
           const allArtists = getArtists();
           let target = targetId ? allArtists.find(a => a.id === targetId) : null;
@@ -3534,7 +3533,7 @@ export default function App() {
             const projects = (target.projects || []).map(p =>
               p.id === updated.id ? { ...p, ...updated } : p
             );
-            saveOneArtist({ ...target, projects });
+            await saveOneArtist({ ...target, projects });
           }
           setPhase("song-home");
         }}
@@ -3679,17 +3678,19 @@ export default function App() {
   if (phase === "artist-catalogue") {
     return (
       <ArtistCatalogueScreen
-        key={getArtists().find(a=>a.id===artistData?.id)?.projects?.length}
-        artistData={getArtists().find(a=>a.id===artistData?.id) || artistData}
+        artistData={artistData}
         profile={profile}
         onBack={() => setPhase("artist-home")}
         onNewProject={() => {
-          setCurrentSong({ data: { artistName: artistData.name, linkedArtist: artistData }, answers: {} });
+          setCurrentSong({ data: { artistName: artistData.name, linkedArtist: { ...artistData } }, answers: {} });
           setSongQIdx(0);
           setPhase("song-form");
         }}
         onOpenProject={(p) => {
-          setCurrentSong({ data: { ...p, artistId: p.artistId || artistData?.id, linkedArtist: p.linkedArtist || { id: artistData?.id, name: artistData?.name } }, answers: p.answers || {} });
+          setCurrentSong({
+            data: { ...p, artistId: p.artistId || artistData?.id, linkedArtist: p.linkedArtist || { id: artistData?.id, name: artistData?.name } },
+            answers: p.answers || {}
+          });
           setSongQIdx(0);
           setPhase("song-home");
         }}
@@ -3785,18 +3786,15 @@ export default function App() {
       profile={profile}
       songNum={songs.length + 1}
       prefilledArtist={artistData?.id ? artistData : null}
-      onBack={() => setPhase(songs.length === 0 ? "welcome" : "artist-result")}
-      onSubmit={(data) => {
+      onBack={() => setPhase(artistData?.id ? "artist-catalogue" : "welcome")}
+      onSubmit={async (data) => {
         const targetArtist = data.linkedArtist || (artistData?.id ? artistData : null);
-        if (targetArtist) {
-          setArtistData(targetArtist);
-        }
-        // Generate a project id and save immediately to the artist record
+        if (targetArtist) setArtistData(targetArtist);
         const projectId = Date.now().toString();
         const projectEntry = { ...data, id: projectId, answers: {}, createdAt: new Date().toISOString() };
         if (targetArtist?.id) {
           const target = getArtists().find(a => a.id === targetArtist.id);
-          if (target) saveOneArtist({ ...target, projects: [...(target.projects || []), projectEntry] });
+          if (target) await saveOneArtist({ ...target, projects: [...(target.projects || []), projectEntry] });
         }
         setCurrentSong({ data: { ...projectEntry }, answers: {} });
         setCurrentSongAnswers({});
