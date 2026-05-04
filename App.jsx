@@ -766,12 +766,44 @@ async function saveArtists(artists) {
 
 // Save a single artist (more efficient than saving all)
 async function saveOneArtist(artist) {
-  _artists = _artists.map(a => a.id === artist.id ? artist : a);
-  if (!_artists.find(a => a.id === artist.id)) _artists.push(artist);
+  if (!artist?.id) { console.error("saveOneArtist: missing id", artist); return; }
+  // Update in-memory immediately
+  const idx = _artists.findIndex(a => a.id === artist.id);
+  if (idx >= 0) _artists[idx] = artist; else _artists.push(artist);
+  try { localStorage.setItem("artists_cache", JSON.stringify(_artists)); } catch(e) {}
   notifyListeners();
+  // Write to Firestore
   try {
     await setDoc(doc(db, "artists", artist.id), artist);
-  } catch(e) { console.warn("saveOneArtist failed", e); }
+    console.log("✅ Guardado en Firebase:", artist.id, "proyectos:", artist.projects?.length ?? 0);
+  } catch(e) {
+    console.error("❌ Firebase error:", e.code, e.message);
+    _firebaseError = `${e.code}: ${e.message}`;
+    notifyListeners();
+  }
+}
+
+let _firebaseError = null;
+function getFirebaseError() { return _firebaseError; }
+function clearFirebaseError() { _firebaseError = null; }
+
+// ── Save a project to its artist — works regardless of origin ──
+async function saveProject(projectEntry, artistId) {
+  if (!artistId) { console.error("saveProject: no artistId"); return false; }
+  // Always read fresh from _artists
+  let artist = _artists.find(a => a.id === artistId);
+  if (!artist) { console.error("saveProject: artist not found", artistId, _artists.map(a=>a.id)); return false; }
+  const existingIdx = (artist.projects || []).findIndex(p => p.id === projectEntry.id);
+  let projects;
+  if (existingIdx >= 0) {
+    projects = artist.projects.map((p, i) => i === existingIdx ? { ...p, ...projectEntry } : p);
+  } else {
+    projects = [...(artist.projects || []), projectEntry];
+  }
+  const updatedArtist = { ...artist, projects };
+  await saveOneArtist(updatedArtist);
+  console.log("✅ saveProject:", projectEntry.id, "→ artist:", artist.name, "total projects:", projects.length);
+  return true;
 }
 
 async function deleteArtists(ids) {
@@ -3187,6 +3219,7 @@ export default function App() {
   const [syncing, setSyncing] = useState(true);
   // Force re-render when Firebase data changes
   const [, forceUpdate] = useState(0);
+  const [, forceRender] = useState(0);
   useEffect(() => {
     const unsub = subscribeStore(() => forceUpdate(n => n + 1));
     return unsub;
@@ -3318,24 +3351,11 @@ export default function App() {
 
   // Helper — persist current project answers/score back to artist record
   function syncProjectToArtist(projectData, answers, score) {
-    if (!projectData?.id) { console.warn("syncProjectToArtist: no project id", projectData); return; }
-    // Try all possible ways to find the target artist
-    const targetId = projectData?.linkedArtist?.id || projectData?.artistId || artistData?.id;
-    const allArtists = getArtists();
-    // Also search by project id across all artists as fallback
-    let target = targetId ? allArtists.find(a => a.id === targetId) : null;
-    if (!target) {
-      target = allArtists.find(a => (a.projects || []).some(p => p.id === projectData.id));
-    }
-    if (!target) { console.warn("syncProjectToArtist: artist not found for project", projectData.id); return; }
-    const projects = (target.projects || []).map(p =>
-      p.id === projectData.id ? { ...p, answers, ...(score !== undefined ? { score } : {}) } : p
-    );
-    // If project not found in artist, add it
-    if (!projects.find(p => p.id === projectData.id)) {
-      projects.push({ ...projectData, answers, ...(score !== undefined ? { score } : {}) });
-    }
-    saveOneArtist({ ...target, projects });
+    if (!projectData?.id) return;
+    const artistId = projectData?.linkedArtist?.id || projectData?.artistId || artistData?.id;
+    if (!artistId) { console.warn("syncProjectToArtist: no artistId for", projectData.id); return; }
+    const updated = { ...projectData, answers, ...(score !== undefined ? { score } : {}) };
+    saveProject(updated, artistId);
   }
 
   // ── Derive songs from current artist's Firebase data ──
@@ -3364,7 +3384,14 @@ export default function App() {
   // SPLASH
   if (showSplash) return <SplashScreen onDone={() => setShowSplash(false)}/>;
 
-  // PROFILE SELECTION
+  // FIREBASE ERROR BANNER
+  const fbError = getFirebaseError();
+  const errorBanner = fbError ? (
+    <div style={{position:'fixed', top:0, left:0, right:0, zIndex:9999, background:'#E8151B', color:'white', padding:'10px 16px', fontFamily:'Arial,sans-serif', fontSize:'12px', textAlign:'center', cursor:'pointer'}}
+      onClick={() => { clearFirebaseError(); forceRender(n=>n+1); }}>
+      ⚠️ Firebase error: {fbError} — toca para cerrar
+    </div>
+  ) : null;
   if (!profile) return <ProfileSelect onSelect={(p) => {
     saveProfile(p);
     if (p.type === 'artist') {
@@ -3391,6 +3418,7 @@ export default function App() {
   if (phase === "welcome") {
     return (
       <div style={{ minHeight:"100dvh", background:t.bg, display:"flex", flexDirection:"column" }}>
+        {errorBanner}
         <div style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"32px 24px", paddingTop:"max(32px, env(safe-area-inset-top, 32px))" }}>
 
           <img src={RIMAS_LOGO} alt="Ri+D" style={{ width:"180px", height:"180px", objectFit:"contain", marginBottom:"40px", filter: dark ? "invert(1)" : "none" }}/>
@@ -3523,17 +3551,13 @@ export default function App() {
         onBack={() => setPhase("song-home")}
         onSave={async (updated) => {
           setCurrentSong(s => ({ ...s, data: updated }));
-          const targetId = updated?.linkedArtist?.id || updated?.artistId || artistData?.id;
-          const allArtists = getArtists();
-          let target = targetId ? allArtists.find(a => a.id === targetId) : null;
-          if (!target && updated?.id) {
-            target = allArtists.find(a => (a.projects||[]).some(p => p.id === updated.id));
-          }
-          if (target) {
-            const projects = (target.projects || []).map(p =>
-              p.id === updated.id ? { ...p, ...updated } : p
-            );
-            await saveOneArtist({ ...target, projects });
+          const artistId = updated?.linkedArtist?.id || updated?.artistId || artistData?.id;
+          if (artistId && updated?.id) {
+            await saveProject(updated, artistId);
+          } else {
+            // fallback: search all artists
+            const found = getArtists().find(a => (a.projects||[]).some(p => p.id === updated?.id));
+            if (found) await saveProject(updated, found.id);
           }
           setPhase("song-home");
         }}
@@ -3544,8 +3568,10 @@ export default function App() {
   // SONG HOME — project hexagon
   if (phase === "song-home") {
     return (
-      <ProjectHomeScreen
-        songData={currentSong?.data}
+      <>
+        {errorBanner}
+        <ProjectHomeScreen
+          songData={currentSong?.data}
         songAnswers={currentSong?.answers || {}}
         onBack={() => setPhase("welcome")}
         onEdit={() => setPhase("project-edit")}
@@ -3561,6 +3587,7 @@ export default function App() {
           setPhase("song-block-home");
         }}
       />
+      </>
     );
   }
 
@@ -3782,21 +3809,26 @@ export default function App() {
 
   // SONG FORM
   if (phase === "song-form") {
+    // Always get fresh artist from live store
+    const liveArtist = artistData?.id ? (getArtists().find(a => a.id === artistData.id) || artistData) : null;
     return <ProjectForm
       profile={profile}
       songNum={songs.length + 1}
-      prefilledArtist={artistData?.id ? artistData : null}
-      onBack={() => setPhase(artistData?.id ? "artist-catalogue" : "welcome")}
+      prefilledArtist={liveArtist}
+      onBack={() => setPhase(liveArtist ? "artist-catalogue" : "welcome")}
       onSubmit={async (data) => {
-        const targetArtist = data.linkedArtist || (artistData?.id ? artistData : null);
-        if (targetArtist) setArtistData(targetArtist);
+        // Resolve artistId from every possible source
+        const artistId = data.linkedArtist?.id || data.artistId || artistData?.id || null;
+        console.log("🎵 song-form submit — artistId:", artistId, "linkedArtist:", data.linkedArtist?.name, "artistData:", artistData?.name);
+        if (data.linkedArtist) setArtistData(data.linkedArtist);
         const projectId = Date.now().toString();
-        const projectEntry = { ...data, id: projectId, answers: {}, createdAt: new Date().toISOString() };
-        if (targetArtist?.id) {
-          const target = getArtists().find(a => a.id === targetArtist.id);
-          if (target) await saveOneArtist({ ...target, projects: [...(target.projects || []), projectEntry] });
+        const projectEntry = { ...data, id: projectId, artistId, answers: {}, createdAt: new Date().toISOString() };
+        if (artistId) {
+          await saveProject(projectEntry, artistId);
+        } else {
+          console.error("❌ No artistId found — project NOT saved to Firebase");
         }
-        setCurrentSong({ data: { ...projectEntry }, answers: {} });
+        setCurrentSong({ data: projectEntry, answers: {} });
         setCurrentSongAnswers({});
         setSongQIdx(0);
         setPhase("song-home");
