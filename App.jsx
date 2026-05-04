@@ -697,12 +697,12 @@ import {
 } from "firebase/firestore";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyC4P1G3JN_JNBPZXLuZrTyIDaHTDdS0AaA",
-  authDomain: "rid-tool.firebaseapp.com",
-  projectId: "rid-tool",
-  storageBucket: "rid-tool.firebasestorage.app",
-  messagingSenderId: "611464032143",
-  appId: "1:611464032143:web:ab5086f15c8c3aa42825fa"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
 const firebaseApp = initializeApp(firebaseConfig);
@@ -1705,11 +1705,11 @@ function ArtistHomeScreen({ artistData, artistAnswers, onBlock, onResult, onBack
       {/* Action buttons + back */}
       <div style={{padding:'12px 24px', paddingBottom:'max(24px,env(safe-area-inset-bottom,24px))', display:'flex', flexDirection:'column', gap:'10px'}}>
         <button onClick={onCatalogue}
-          style={{display:'block', width:'100%', padding:'15px', background:t.card, border:`1.5px solid ${t.border}`, borderRadius:'14px', fontFamily:'Arial,sans-serif', fontSize:'15px', fontWeight:'700', color:t.text, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:'8px', boxShadow:`0 2px 8px ${t.shadow}`}}>
+          style={{width:'100%', padding:'15px', background:t.card, border:`1.5px solid ${t.border}`, borderRadius:'14px', fontFamily:'Arial,sans-serif', fontSize:'15px', fontWeight:'700', color:t.text, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:'8px', boxShadow:`0 2px 8px ${t.shadow}`}}>
           <span style={{fontSize:'18px'}}>🎵</span> Catálogo
         </button>
         <button onClick={onPending}
-          style={{display:'block', width:'100%', padding:'15px', background:t.bg2, border:`1.5px solid ${t.border}`, borderRadius:'14px', fontFamily:'Arial,sans-serif', fontSize:'15px', fontWeight:'600', color:t.text, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:'8px'}}>
+          style={{width:'100%', padding:'15px', background:t.bg2, border:`1.5px solid ${t.border}`, borderRadius:'14px', fontFamily:'Arial,sans-serif', fontSize:'15px', fontWeight:'600', color:t.text, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:'8px'}}>
           <span style={{fontSize:'16px'}}>📋</span> Tareas pendientes
         </button>
         <button onClick={onBack}
@@ -2672,7 +2672,7 @@ function ProjectHomeScreen({ songData, songAnswers, onBlock, onResult, onBack, o
       {/* Back button */}
       <div style={{padding:'12px 32px', paddingBottom:'max(24px,env(safe-area-inset-bottom,24px))', display:'flex', flexDirection:'column', gap:'10px'}}>
         <button onClick={onPending}
-          style={{display:'block', width:'100%', padding:'15px', background:t.bg2, border:`1.5px solid ${t.border}`, borderRadius:'14px', fontFamily:'Arial,sans-serif', fontSize:'15px', fontWeight:'600', color:t.text, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:'8px'}}>
+          style={{width:'100%', padding:'15px', background:t.bg2, border:`1.5px solid ${t.border}`, borderRadius:'14px', fontFamily:'Arial,sans-serif', fontSize:'15px', fontWeight:'600', color:t.text, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:'8px'}}>
           <span style={{fontSize:'16px'}}>📋</span> Tareas pendientes
         </button>
         <button onClick={onBack}
