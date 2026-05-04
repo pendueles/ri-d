@@ -1578,58 +1578,185 @@ function ArtistHomeScreen({ artistData, artistAnswers, onBlock, onResult, onBack
         </button>
       </div>
 
-      {/* Hexagon — centered, takes remaining space */}
-      <div style={{flex:1, display:'flex', alignItems:'center', justifyContent:'center', padding:'16px'}}>
-        <div style={{position:'relative', width:`${S}px`, height:`${S}px`}}>
-          <svg width={S} height={S} viewBox={`0 0 ${S} ${S}`} style={{position:'absolute', inset:0, pointerEvents:'none'}}>
-            {[0.33, 0.66, 1].map((scale, ri) => {
-              const pts = hexPoints.map(p => ({ x: cx+(p.x-cx)*scale, y: cy+(p.y-cy)*scale }));
-              const path = pts.map((p,i) => `${i===0?'M':'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ') + ' Z';
-              return <path key={ri} d={path} fill="none" stroke={t.border} strokeWidth="1"/>;
-            })}
-            {hexPoints.map((p,i) => (
-              <line key={i} x1={cx} y1={cy} x2={p.x.toFixed(1)} y2={p.y.toFixed(1)} stroke={t.border} strokeWidth="1"/>
-            ))}
-            {dataPolygon && (
-              <path d={dataPolygon} fill="rgba(232,21,27,0.15)" stroke="#E8151B" strokeWidth="2" strokeLinejoin="round"/>
-            )}
-            {vertices.map(v => {
-              const score = getBlockScore(v.id);
-              if (score === null || score === 0) return null;
-              const pct = score / 100;
-              const px = cx + R * pct * Math.cos(rad(v.angle));
-              const py = cy + R * pct * Math.sin(rad(v.angle));
-              return <circle key={v.id} cx={px.toFixed(1)} cy={py.toFixed(1)} r="4" fill="#E8151B"/>;
-            })}
-          </svg>
-          {vertices.map((v) => {
-            const px = cx + R * Math.cos(rad(v.angle));
-            const py = cy + R * Math.sin(rad(v.angle));
-            const score = getBlockScore(v.id);
-            const isResult = v.id === 'result';
-            const hasScore = score !== null;
-            return (
-              <button key={v.id} onClick={() => isResult ? onResult() : onBlock(v.id)}
-                style={{position:'absolute', left:`${px}px`, top:`${py}px`, transform:'translate(-50%,-50%)',
-                  display:'flex', flexDirection:'column', alignItems:'center', gap:'2px',
-                  background: isResult ? t.accent : hasScore ? t.text : t.bg,
-                  border:`1.5px solid ${isResult ? t.accent : hasScore ? t.text : t.border}`,
-                  borderRadius:'20px', padding:'6px 12px', cursor:'pointer', minWidth:'62px',
-                  boxShadow: hasScore||isResult ? `0 2px 10px ${t.shadow}` : 'none', transition:'all 0.2s'}}>
-                {!isResult && (
-                  <div style={{fontFamily:'Arial,sans-serif', fontSize:'9px', fontWeight:'700',
-                    color: hasScore ? t.bg : t.text2, letterSpacing:'0.06em', textTransform:'uppercase', whiteSpace:'nowrap'}}>
-                    {v.label}
-                  </div>
-                )}
-                {(hasScore || isResult) && (
-                  <div style={{fontFamily:'Arial,sans-serif', fontSize: isResult ? '20px' : '12px', fontWeight:'700',
-                    color: isResult?'#fff':t.bg, lineHeight:1}}>{score}</div>
-                )}
-              </button>
-            );
-          })}
-        </div>
+      {/* Three hexagons */}
+      <div style={{flex:1, display:'flex', alignItems:'center', justifyContent:'center', padding:'8px 12px', gap:'8px'}}>
+
+        {/* PERFIL — left, small */}
+        {(() => {
+          const Sv = 130, cxv = Sv/2, cyv = Sv/2, Rv = 44;
+          const hexPts = vertices.map(v => ({ x: cxv + Rv * Math.cos(rad(v.angle)), y: cyv + Rv * Math.sin(rad(v.angle)) }));
+          const dataPoly = (() => {
+            const pts = [...vertices].sort((a,b)=>a.angle-b.angle).map(v => {
+              const s = getBlockScore(v.id); if (s===null) return null;
+              const p = Math.max(0.01, s/100);
+              return { x: cxv + Rv*p*Math.cos(rad(v.angle)), y: cyv + Rv*p*Math.sin(rad(v.angle)) };
+            }).filter(Boolean);
+            if (pts.length<2) return null;
+            return pts.map((p,i)=>`${i===0?'M':'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')+' Z';
+          })();
+          const artistScore = Math.round(calcTotalScore(ARTIST_BLOCKS, artistAnswers)*10)/10;
+          return (
+            <button onClick={onResult} style={{display:'flex', flexDirection:'column', alignItems:'center', gap:'6px', background:'transparent', border:'none', cursor:'pointer', padding:'4px'}}>
+              <div style={{fontFamily:'Arial,sans-serif', fontSize:'10px', fontWeight:'700', color:t.text3, letterSpacing:'0.1em', textTransform:'uppercase'}}>Perfil</div>
+              <div style={{position:'relative', width:`${Sv}px`, height:`${Sv}px`}}>
+                <svg width={Sv} height={Sv} viewBox={`0 0 ${Sv} ${Sv}`} style={{position:'absolute', inset:0}}>
+                  {[0.33,0.66,1].map((sc,ri) => {
+                    const ps = hexPts.map(p => ({x:cxv+(p.x-cxv)*sc, y:cyv+(p.y-cyv)*sc}));
+                    return <path key={ri} d={ps.map((p,i)=>`${i===0?'M':'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')+' Z'} fill="none" stroke={t.border} strokeWidth="1"/>;
+                  })}
+                  {hexPts.map((p,i) => <line key={i} x1={cxv} y1={cyv} x2={p.x} y2={p.y} stroke={t.border} strokeWidth="1"/>)}
+                  {dataPoly && <path d={dataPoly} fill="rgba(232,21,27,0.15)" stroke="#E8151B" strokeWidth="1.5" strokeLinejoin="round"/>}
+                </svg>
+              </div>
+              {Object.keys(artistAnswers).length > 0 && (
+                <div style={{fontFamily:'Arial,sans-serif', fontSize:'18px', fontWeight:'700', color:scoreColor(artistScore)}}>{artistScore}</div>
+              )}
+            </button>
+          );
+        })()}
+
+        {/* GENERAL — center, large */}
+        {(() => {
+          const artistProjects = _projects.filter(p => p.artistId === artistData?.id);
+          const artistScore = calcTotalScore(ARTIST_BLOCKS, artistAnswers);
+          const projectScores = artistProjects.map(p => {
+            const ans = p.answers || {};
+            return Object.keys(ans).length > 0 ? calcTotalScore(SONG_BLOCKS, ans) : null;
+          }).filter(s => s !== null);
+          const catalogueAvg = projectScores.length > 0 ? projectScores.reduce((a,b)=>a+b,0)/projectScores.length : null;
+          const hasArtist = Object.keys(artistAnswers).length > 0;
+          const generalScore = (() => {
+            if (catalogueAvg !== null && hasArtist) return Math.round((catalogueAvg*0.7 + artistScore*0.3)*10)/10;
+            if (catalogueAvg !== null) return Math.round(catalogueAvg*10)/10;
+            if (hasArtist) return Math.round(artistScore*10)/10;
+            return null;
+          })();
+          const Sg = 180, cxg = Sg/2, cyg = Sg/2, Rg = 64;
+          const hexPts = vertices.map(v => ({ x: cxg + Rg * Math.cos(rad(v.angle)), y: cyg + Rg * Math.sin(rad(v.angle)) }));
+          // Blend artist and catalogue block scores
+          const blendedScore = (blockId) => {
+            if (blockId === 'result') return generalScore;
+            const artistBlock = ARTIST_BLOCKS.find(b => b.id === blockId);
+            const songBlock = SONG_BLOCKS.find(b => b.id === blockId);
+            const aScore = artistBlock ? (() => {
+              const has = artistBlock.subcats.some(s=>s.items.some(i=>artistAnswers[i.id]!==undefined));
+              return has ? calcBlockScore(artistBlock, artistAnswers) : null;
+            })() : null;
+            const cScores = artistProjects.map(p => {
+              const ans = p.answers||{};
+              if (!songBlock) return null;
+              const has = songBlock.subcats.some(s=>s.items.some(i=>ans[i.id]!==undefined));
+              return has ? calcBlockScore(songBlock, ans) : null;
+            }).filter(s=>s!==null);
+            const cAvg = cScores.length>0 ? cScores.reduce((a,b)=>a+b,0)/cScores.length : null;
+            if (cAvg!==null && aScore!==null) return Math.round((cAvg*0.7+aScore*0.3)*10)/10;
+            if (cAvg!==null) return Math.round(cAvg*10)/10;
+            if (aScore!==null) return Math.round(aScore*10)/10;
+            return null;
+          };
+          const dataPoly = (() => {
+            const pts = [...vertices].sort((a,b)=>a.angle-b.angle).map(v => {
+              const s = blendedScore(v.id); if (s===null) return null;
+              const p = Math.max(0.01, s/100);
+              return { x: cxg + Rg*p*Math.cos(rad(v.angle)), y: cyg + Rg*p*Math.sin(rad(v.angle)) };
+            }).filter(Boolean);
+            if (pts.length<2) return null;
+            return pts.map((p,i)=>`${i===0?'M':'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')+' Z';
+          })();
+          return (
+            <div style={{display:'flex', flexDirection:'column', alignItems:'center', gap:'6px', padding:'4px'}}>
+              <div style={{fontFamily:'Arial,sans-serif', fontSize:'10px', fontWeight:'700', color:t.text3, letterSpacing:'0.1em', textTransform:'uppercase'}}>General</div>
+              <div style={{position:'relative', width:`${Sg}px`, height:`${Sg}px`}}>
+                <svg width={Sg} height={Sg} viewBox={`0 0 ${Sg} ${Sg}`} style={{position:'absolute', inset:0}}>
+                  {[0.33,0.66,1].map((sc,ri) => {
+                    const ps = hexPts.map(p => ({x:cxg+(p.x-cxg)*sc, y:cyg+(p.y-cyg)*sc}));
+                    return <path key={ri} d={ps.map((p,i)=>`${i===0?'M':'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')+' Z'} fill="none" stroke={t.border} strokeWidth="1"/>;
+                  })}
+                  {hexPts.map((p,i) => <line key={i} x1={cxg} y1={cyg} x2={p.x} y2={p.y} stroke={t.border} strokeWidth="1"/>)}
+                  {dataPoly && <path d={dataPoly} fill="rgba(232,21,27,0.15)" stroke="#E8151B" strokeWidth="2" strokeLinejoin="round"/>}
+                </svg>
+                {vertices.map(v => {
+                  const s = blendedScore(v.id); if (s===null&&v.id!=='result') return null;
+                  const px = cxg + Rg * Math.cos(rad(v.angle));
+                  const py = cyg + Rg * Math.sin(rad(v.angle));
+                  const isRes = v.id==='result';
+                  return (
+                    <div key={v.id} style={{position:'absolute', left:`${px}px`, top:`${py}px`, transform:'translate(-50%,-50%)',
+                      background: isRes ? t.accent : s!==null ? t.text : 'transparent',
+                      borderRadius:'16px', padding: isRes ? '4px 10px' : s!==null ? '3px 8px' : '0',
+                      fontFamily:'Arial,sans-serif', fontSize: isRes?'16px':'10px', fontWeight:'700',
+                      color: isRes||s!==null ? '#fff' : t.text3, whiteSpace:'nowrap', pointerEvents:'none'}}>
+                      {isRes ? (generalScore??'–') : s!==null ? s : v.label}
+                    </div>
+                  );
+                })}
+              </div>
+              {generalScore !== null && (
+                <div style={{fontFamily:'Arial,sans-serif', fontSize:'22px', fontWeight:'700', color:scoreColor(generalScore)}}>{generalScore}</div>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* CATÁLOGO — right, small */}
+        {(() => {
+          const artistProjects = _projects.filter(p => p.artistId === artistData?.id);
+          const projectScores = artistProjects.map(p => {
+            const ans = p.answers||{};
+            return Object.keys(ans).length>0 ? calcTotalScore(SONG_BLOCKS, ans) : null;
+          }).filter(s=>s!==null);
+          const catalogueAvg = projectScores.length>0 ? Math.round(projectScores.reduce((a,b)=>a+b,0)/projectScores.length*10)/10 : null;
+          const Sv = 130, cxv = Sv/2, cyv = Sv/2, Rv = 44;
+          // Catalogue block scores (avg across all projects)
+          const getCatBlockScore = (blockId) => {
+            if (blockId==='result') return catalogueAvg;
+            const songBlock = SONG_BLOCKS.find(b=>b.id===blockId);
+            if (!songBlock) return null;
+            const scores = artistProjects.map(p => {
+              const ans = p.answers||{};
+              const has = songBlock.subcats.some(s=>s.items.some(i=>ans[i.id]!==undefined));
+              return has ? calcBlockScore(songBlock, ans) : null;
+            }).filter(s=>s!==null);
+            return scores.length>0 ? Math.round(scores.reduce((a,b)=>a+b,0)/scores.length*10)/10 : null;
+          };
+          const songVertices = [
+            { id:'result', label:'Resultado', angle:-90 },
+            { id:'social', label:'Social', angle:-30 },
+            { id:'ytvideo', label:'Video', angle:30 },
+            { id:'rights', label:'Rights', angle:90 },
+            { id:'authority', label:'Authority', angle:150 },
+            { id:'dsps', label:'DSPs', angle:210 },
+          ];
+          const hexPts = songVertices.map(v => ({ x: cxv + Rv * Math.cos(rad(v.angle)), y: cyv + Rv * Math.sin(rad(v.angle)) }));
+          const dataPoly = (() => {
+            const pts = [...songVertices].sort((a,b)=>a.angle-b.angle).map(v => {
+              const s = getCatBlockScore(v.id); if (s===null) return null;
+              const p = Math.max(0.01, s/100);
+              return { x: cxv + Rv*p*Math.cos(rad(v.angle)), y: cyv + Rv*p*Math.sin(rad(v.angle)) };
+            }).filter(Boolean);
+            if (pts.length<2) return null;
+            return pts.map((p,i)=>`${i===0?'M':'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')+' Z';
+          })();
+          return (
+            <button onClick={onCatalogue} style={{display:'flex', flexDirection:'column', alignItems:'center', gap:'6px', background:'transparent', border:'none', cursor:'pointer', padding:'4px'}}>
+              <div style={{fontFamily:'Arial,sans-serif', fontSize:'10px', fontWeight:'700', color:t.text3, letterSpacing:'0.1em', textTransform:'uppercase'}}>Catálogo</div>
+              <div style={{position:'relative', width:`${Sv}px`, height:`${Sv}px`}}>
+                <svg width={Sv} height={Sv} viewBox={`0 0 ${Sv} ${Sv}`} style={{position:'absolute', inset:0}}>
+                  {[0.33,0.66,1].map((sc,ri) => {
+                    const ps = hexPts.map(p => ({x:cxv+(p.x-cxv)*sc, y:cyv+(p.y-cyv)*sc}));
+                    return <path key={ri} d={ps.map((p,i)=>`${i===0?'M':'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')+' Z'} fill="none" stroke={t.border} strokeWidth="1"/>;
+                  })}
+                  {hexPts.map((p,i) => <line key={i} x1={cxv} y1={cyv} x2={p.x} y2={p.y} stroke={t.border} strokeWidth="1"/>)}
+                  {dataPoly && <path d={dataPoly} fill="rgba(232,21,27,0.15)" stroke="#E8151B" strokeWidth="1.5" strokeLinejoin="round"/>}
+                </svg>
+              </div>
+              {catalogueAvg !== null && (
+                <div style={{fontFamily:'Arial,sans-serif', fontSize:'18px', fontWeight:'700', color:scoreColor(catalogueAvg)}}>{catalogueAvg}</div>
+              )}
+            </button>
+          );
+        })()}
+
       </div>
 
       {/* Action buttons + back */}
@@ -2044,6 +2171,13 @@ function ArtistListScreen({ profile, onBack, onSelect, onCreate, liveArtists }) 
                     {(artist.labelUsers?.length > 0 ? artist.labelUsers : [artist.labelUser].filter(Boolean)).join(', ') || "Sin label manager"}
                   </div>
                 </div>
+                {!editMode && (() => {
+                  const ans = artist.answers || {};
+                  const answered = Object.keys(ans).length;
+                  if (answered === 0) return null;
+                  const score = Math.round(calcTotalScore(ARTIST_BLOCKS, ans) * 10) / 10;
+                  return <div style={{ fontFamily:"Arial,sans-serif", fontSize:"18px", fontWeight:"700", color:scoreColor(score), flexShrink:0, marginRight:'4px' }}>{score}</div>;
+                })()}
                 {!editMode && canEdit && (
                   <button onClick={e => { e.stopPropagation(); setEditingManagement(artist); setMgmtInput(artist.management || ''); }}
                     style={{ background:"transparent", border:"none", color:t.text3, fontFamily:"Arial,sans-serif", fontSize:"12px", cursor:"pointer", padding:"4px 8px", flexShrink:0 }}>
