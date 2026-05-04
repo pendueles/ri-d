@@ -3179,7 +3179,6 @@ export default function App() {
   const [songQIdx, setSongQIdx] = useState(0);
   const [currentSongAnswers, setCurrentSongAnswers] = useState({});
 
-  const [hasSaved, setHasSaved] = useState(false);
   const [syncing, setSyncing] = useState(true);
   // Force re-render when Firebase data changes
   const [, forceUpdate] = useState(0);
@@ -3191,26 +3190,20 @@ export default function App() {
   useEffect(() => {
     const unsub = startRealtimeSync(() => {
       setSyncing(false);
-      const saved = loadState();
       if (saved && saved.phase && saved.phase !== "welcome") {
-        setHasSaved(true);
       }
     });
     return unsub;
   }, []);
 
-  function resumeSaved() {
-    const saved = loadState();
-    if (saved) { setPhase(saved.phase||"welcome"); setArtistData(saved.artistData||{}); setArtistAnswers(saved.artistAnswers||{}); setArtistQIdx(saved.artistQIdx||0); setCurrentBlockIdx(saved.currentBlockIdx||0); setSongs(saved.songs||[]); setCurrentSong(saved.currentSong||null); setSongQIdx(saved.songQIdx||0); }
-  }
+
 
   function resetAll() {
-    clearState(); setPhase("welcome"); setArtistData({}); setArtistAnswers({}); setArtistQIdx(0); setCurrentBlockIdx(0); setSongs([]); setCurrentSong(null); setSongQIdx(0); setHasSaved(false);
+    setPhase("welcome"); setArtistData({}); setArtistAnswers({}); setArtistQIdx(0); setCurrentBlockIdx(0); setSongs([]); setCurrentSong(null); setSongQIdx(0); setHasSaved(false);
   }
 
   useEffect(() => {
     if (phase === "welcome") return;
-    saveState({ phase, artistData, artistAnswers, artistQIdx, currentBlockIdx, songs, currentSong, songQIdx });
   }, [phase, artistData, artistAnswers, artistQIdx, currentBlockIdx, songs, currentSong, songQIdx]);
 
   // ── Block boundary helpers ──
@@ -3320,14 +3313,23 @@ export default function App() {
 
   // Helper — persist current project answers/score back to artist record
   function syncProjectToArtist(projectData, answers, score) {
-    const targetId = projectData?.linkedArtist?.id || artistData?.id;
-    if (!targetId || !projectData?.id) return;
+    if (!projectData?.id) { console.warn("syncProjectToArtist: no project id", projectData); return; }
+    // Try all possible ways to find the target artist
+    const targetId = projectData?.linkedArtist?.id || projectData?.artistId || artistData?.id;
     const allArtists = getArtists();
-    const target = allArtists.find(a => a.id === targetId);
-    if (!target) return;
+    // Also search by project id across all artists as fallback
+    let target = targetId ? allArtists.find(a => a.id === targetId) : null;
+    if (!target) {
+      target = allArtists.find(a => (a.projects || []).some(p => p.id === projectData.id));
+    }
+    if (!target) { console.warn("syncProjectToArtist: artist not found for project", projectData.id); return; }
     const projects = (target.projects || []).map(p =>
       p.id === projectData.id ? { ...p, answers, ...(score !== undefined ? { score } : {}) } : p
     );
+    // If project not found in artist, add it
+    if (!projects.find(p => p.id === projectData.id)) {
+      projects.push({ ...projectData, answers, ...(score !== undefined ? { score } : {}) });
+    }
     saveOneArtist({ ...target, projects });
   }
 
@@ -3426,11 +3428,7 @@ export default function App() {
               </button>
             </div>
           )}
-          {hasSaved && (
-            <button onClick={resumeSaved} style={{ display:"block", width:"100%", padding:"15px", background:t.accent, color:"white", border:"none", borderRadius:"14px", fontFamily:"Arial, sans-serif", fontSize:"15px", fontWeight:"700", cursor:"pointer" }}>
-              Continuar sesión guardada
-            </button>
-          )}
+
           <button onClick={() => saveProfile(null)} style={{ display:"block", width:"100%", padding:"13px", background:"transparent", color:t.text3, border:"none", borderRadius:"14px", fontFamily:"Arial, sans-serif", fontSize:"13px", cursor:"pointer" }}>
             Cambiar perfil
           </button>
@@ -3680,7 +3678,7 @@ export default function App() {
           setPhase("song-form");
         }}
         onOpenProject={(p) => {
-          setCurrentSong({ data: p, answers: p.answers || {} });
+          setCurrentSong({ data: { ...p, artistId: p.artistId || artistData?.id, linkedArtist: p.linkedArtist || { id: artistData?.id, name: artistData?.name } }, answers: p.answers || {} });
           setSongQIdx(0);
           setPhase("song-home");
         }}
@@ -3961,7 +3959,7 @@ export default function App() {
         </div>
 
         <div style={{padding:"12px 18px",paddingBottom:"max(12px,env(safe-area-inset-bottom,12px))"}}>
-          <button onClick={()=>{clearState();setPhase("welcome");setArtistData({});setArtistAnswers({});setArtistQIdx(0);setCurrentBlockIdx(0);setSongs([]);setCurrentSong(null);setSongQIdx(0);}}
+          <button onClick={()=>{setPhase("welcome");setArtistData({});setArtistAnswers({});setArtistQIdx(0);setCurrentBlockIdx(0);setSongs([]);setCurrentSong(null);setSongQIdx(0);}}
             style={{display:"block",width:"100%",padding:"17px",background:"white",color:"#E8151B",border:"none",borderRadius:"14px",fontFamily:"Arial,sans-serif",fontSize:"17px",fontWeight:"700",cursor:"pointer"}}>
             Nueva evaluación
           </button>
