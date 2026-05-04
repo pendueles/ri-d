@@ -708,6 +708,15 @@ const firebaseConfig = {
 const firebaseApp = initializeApp(firebaseConfig);
 const db = getFirestore(firebaseApp);
 
+// Hook to subscribe to Firebase store changes and force re-render
+function useFirebaseStore() {
+  const [, forceUpdate] = useState(0);
+  useEffect(() => {
+    const unsub = subscribeStore(() => forceUpdate(n => n + 1));
+    return unsub;
+  }, []);
+}
+
 // ── Session state (local only — UI navigation state) ──
 const STORAGE_KEY = "tool_pwa_v1";
 function saveState(state) {
@@ -1666,7 +1675,6 @@ function ProfileSelect({ onSelect }) {
   const t = theme(isDark());
   const [name, setName] = useState('');
   const [error, setError] = useState('');
-  useFirebaseStore(); // re-render when Firebase data arrives
 
   const handleEnter = () => {
     const n = name.trim();
@@ -2616,15 +2624,6 @@ function TotalSummaryScreen({ blocks, answers, title, subtitle, photo, onContinu
       </div>
     </div>
   );
-}
-
-// Hook to subscribe to Firebase store changes and force re-render
-function useFirebaseStore() {
-  const [, forceUpdate] = useState(0);
-  useEffect(() => {
-    const unsub = subscribeStore(() => forceUpdate(n => n + 1));
-    return unsub;
-  }, []);
 }
 
 // ═══════════════════════════════════════════
