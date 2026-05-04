@@ -3173,13 +3173,8 @@ export default function App() {
   const dark = useDarkMode();
   const t = theme(dark);
   const [showSplash, setShowSplash] = useState(true);
-  const [profile, setProfile] = useState(() => {
-    try { const p = localStorage.getItem('rid_profile'); return p ? JSON.parse(p) : null; } catch(e) { return null; }
-  });
-  const saveProfile = (p) => {
-    try { if (p) localStorage.setItem('rid_profile', JSON.stringify(p)); else localStorage.removeItem('rid_profile'); } catch(e) {}
-    saveProfile(p);
-  };
+  const [profile, setProfile] = useState(null); // never persisted — always ask on load
+  const saveProfile = (p) => { setProfile(p); };
   const [phase, setPhase] = useState("welcome");
   const [artistData, setArtistData] = useState({});
   const [artistAnswers, setArtistAnswers] = useState({});
@@ -3210,7 +3205,7 @@ export default function App() {
 
 
   function resetAll() {
-    setPhase("welcome"); setArtistData({}); setArtistAnswers({}); setArtistQIdx(0); setCurrentBlockIdx(0); setSongs([]); setCurrentSong(null); setSongQIdx(0); setHasSaved(false);
+    setPhase("welcome"); setArtistData({}); setArtistAnswers({}); setArtistQIdx(0); setCurrentBlockIdx(0); setSongs([]); setCurrentSong(null); setSongQIdx(0);
   }
 
   useEffect(() => {
@@ -3970,7 +3965,7 @@ export default function App() {
         </div>
 
         <div style={{padding:"12px 18px",paddingBottom:"max(12px,env(safe-area-inset-bottom,12px))"}}>
-          <button onClick={()=>{setPhase("welcome");setArtistData({});setArtistAnswers({});setArtistQIdx(0);setCurrentBlockIdx(0);setSongs([]);setCurrentSong(null);setSongQIdx(0);}}
+          <button onClick={()=>{saveProfile(null);setPhase("welcome");setArtistData({});setArtistAnswers({});setArtistQIdx(0);setCurrentBlockIdx(0);setSongs([]);setCurrentSong(null);setSongQIdx(0);}}
             style={{display:"block",width:"100%",padding:"17px",background:"white",color:"#E8151B",border:"none",borderRadius:"14px",fontFamily:"Arial,sans-serif",fontSize:"17px",fontWeight:"700",cursor:"pointer"}}>
             Nueva evaluación
           </button>
