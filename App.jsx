@@ -698,32 +698,129 @@ function clearState() {
   try { localStorage.removeItem(STORAGE_KEY); } catch(e){}
 }
 
-// ── ARTIST USERS (auto-registered when artist is created) ──
+// ═══════════════════════════════════════════
+// FIREBASE CONFIG & DATA LAYER
+// ═══════════════════════════════════════════
+import { initializeApp } from "firebase/app";
+import {
+  getFirestore, doc, getDoc, setDoc, collection,
+  getDocs, deleteDoc, onSnapshot, writeBatch
+} from "firebase/firestore";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyC4P1G3JN_JNBPZXLuZrTyIDaHTDdS0AaA",
+  authDomain: "rid-tool.firebaseapp.com",
+  projectId: "rid-tool",
+  storageBucket: "rid-tool.firebasestorage.app",
+  messagingSenderId: "611464032143",
+  appId: "1:611464032143:web:ab5086f15c8c3aa42825fa"
+};
+
+const firebaseApp = initializeApp(firebaseConfig);
+const db = getFirestore(firebaseApp);
+
+// ── Session state (local only — UI state, not data) ──
+const STORAGE_KEY = "tool_pwa_v1";
+function saveState(state) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch(e){}
+}
+function loadState() {
+  try { const s = localStorage.getItem(STORAGE_KEY); return s ? JSON.parse(s) : null; } catch(e){ return null; }
+}
+function clearState() {
+  try { localStorage.removeItem(STORAGE_KEY); } catch(e){}
+}
+
+// ── Artists (Firestore) ──
+async function getArtistsAsync() {
+  try {
+    const snap = await getDocs(collection(db, "artists"));
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch(e) { return []; }
+}
+function getArtists() {
+  // Sync fallback from cache
+  try { const s = localStorage.getItem("artists_cache"); return s ? JSON.parse(s) : []; } catch(e){ return []; }
+}
+async function saveArtistsAsync(artists) {
+  try {
+    const batch = writeBatch(db);
+    artists.forEach(a => {
+      const ref = doc(db, "artists", a.id || Date.now().toString());
+      batch.set(ref, a);
+    });
+    await batch.commit();
+    localStorage.setItem("artists_cache", JSON.stringify(artists));
+  } catch(e) { localStorage.setItem("artists_cache", JSON.stringify(artists)); }
+}
+function saveArtists(artists) {
+  localStorage.setItem("artists_cache", JSON.stringify(artists));
+  saveArtistsAsync(artists).catch(() => {});
+}
+
+// ── Artist users ──
 const ARTIST_USERS_KEY = "tool_artist_users_v1";
 function getArtistUsers() {
   try { const s = localStorage.getItem(ARTIST_USERS_KEY); return s ? JSON.parse(s) : {}; } catch(e) { return {}; }
 }
 function saveArtistUsers(users) {
   try { localStorage.setItem(ARTIST_USERS_KEY, JSON.stringify(users)); } catch(e) {}
+  setDoc(doc(db, "config", "artistUsers"), users).catch(() => {});
 }
 function registerArtistUser(name) {
   const users = getArtistUsers();
   users[name.trim()] = true;
   saveArtistUsers(users);
 }
-const ARTISTS_KEY = "tool_artists_v1";
-function getArtists() {
-  try { const s = localStorage.getItem(ARTISTS_KEY); return s ? JSON.parse(s) : []; } catch(e){ return []; }
+
+// ── Label users ──
+const DEFAULT_LABEL_USERS = { 'Mara': true, 'Fer': true, 'Cueto': true };
+const LABEL_USERS_KEY = "tool_label_users_v1";
+function getLabelUsers() {
+  try {
+    const s = localStorage.getItem(LABEL_USERS_KEY);
+    const stored = s ? JSON.parse(s) : {};
+    return { ...DEFAULT_LABEL_USERS, ...stored };
+  } catch(e) { return DEFAULT_LABEL_USERS; }
 }
-function saveArtists(artists) {
-  try { localStorage.setItem(ARTISTS_KEY, JSON.stringify(artists)); } catch(e){}
+function saveLabelUsers(users) {
+  try { localStorage.setItem(LABEL_USERS_KEY, JSON.stringify({ ...DEFAULT_LABEL_USERS, ...users })); } catch(e) {}
+  setDoc(doc(db, "config", "labelUsers"), { ...DEFAULT_LABEL_USERS, ...users }).catch(() => {});
 }
-function addArtist(artistData) {
-  const artists = getArtists();
-  const newArtist = { ...artistData, id: Date.now().toString(), createdAt: new Date().toISOString() };
-  artists.push(newArtist);
-  saveArtists(artists);
-  return newArtist;
+
+// ── Sync from Firestore on load ──
+async function syncFromFirestore() {
+  try {
+    // Sync artists
+    const snap = await getDocs(collection(db, "artists"));
+    const artists = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    if (artists.length > 0) {
+      localStorage.setItem("artists_cache", JSON.stringify(artists));
+    }
+    // Sync label users
+    const luSnap = await getDoc(doc(db, "config", "labelUsers"));
+    if (luSnap.exists()) {
+      localStorage.setItem(LABEL_USERS_KEY, JSON.stringify(luSnap.data()));
+    }
+    // Sync artist users
+    const auSnap = await getDoc(doc(db, "config", "artistUsers"));
+    if (auSnap.exists()) {
+      localStorage.setItem(ARTIST_USERS_KEY, JSON.stringify(auSnap.data()));
+    }
+    // Sync mgmt users
+    const mgmtSnap = await getDoc(doc(db, "config", "mgmtUsers"));
+    if (mgmtSnap.exists()) {
+      localStorage.setItem("tool_mgmt_users_v1", JSON.stringify(mgmtSnap.data()));
+    }
+  } catch(e) { console.warn("Firestore sync failed, using local cache", e); }
+}
+
+function saveMgmtUsers(users) {
+  try { localStorage.setItem("tool_mgmt_users_v1", JSON.stringify(users)); } catch(e) {}
+  setDoc(doc(db, "config", "mgmtUsers"), users).catch(() => {});
+}
+function getMgmtUsers() {
+  try { return JSON.parse(localStorage.getItem("tool_mgmt_users_v1") || "{}"); } catch(e) { return {}; } 
 }
 
 // ═══════════════════════════════════════════
@@ -1526,18 +1623,6 @@ function SplashScreen({ onDone }) {
 // ═══════════════════════════════════════════
 // PROFILE SELECTION
 // ═══════════════════════════════════════════
-const DEFAULT_LABEL_USERS = { 'Mara': true, 'Fer': true, 'Cueto': true };
-const LABEL_USERS_KEY = "tool_label_users_v1";
-function getLabelUsers() {
-  try {
-    const s = localStorage.getItem(LABEL_USERS_KEY);
-    const stored = s ? JSON.parse(s) : {};
-    return { ...DEFAULT_LABEL_USERS, ...stored };
-  } catch(e) { return DEFAULT_LABEL_USERS; }
-}
-function saveLabelUsers(users) {
-  try { localStorage.setItem(LABEL_USERS_KEY, JSON.stringify({ ...DEFAULT_LABEL_USERS, ...users })); } catch(e) {}
-}
 
 function ProfileSelect({ onSelect }) {
   const t = theme(isDark());
@@ -1559,7 +1644,7 @@ function ProfileSelect({ onSelect }) {
     }
 
     // Management — check mgmt users store AND artists
-    const mgmtUsers = (() => { try { return JSON.parse(localStorage.getItem('tool_mgmt_users_v1') || '{}'); } catch(e) { return {}; } })();
+    const mgmtUsers = getMgmtUsers();
     if (mgmtUsers[n]) { onSelect({ type: 'management', name: n }); return; }
     const isManager = artists.some(a => a.management && a.management.split(';').map(m => m.trim().toLowerCase()).includes(n.toLowerCase()));
     if (isManager) { onSelect({ type: 'management', name: n }); return; }
@@ -1650,9 +1735,9 @@ function ArtistListScreen({ profile, onBack, onSelect, onCreate }) {
   const handleSaveManagement = (extraLabelUsers) => {
     const managers = mgmtInput.split(';').map(m => m.trim()).filter(Boolean);
     try {
-      const existing = JSON.parse(localStorage.getItem('tool_mgmt_users_v1') || '{}');
+      const existing = getMgmtUsers();
       managers.forEach(m => { existing[m] = true; });
-      localStorage.setItem('tool_mgmt_users_v1', JSON.stringify(existing));
+      saveMgmtUsers(existing);
     } catch(e) {}
     const updated = allArtists.map(a =>
       a.id === editingManagement.id ? {
@@ -1883,9 +1968,9 @@ function NewArtistForm({ profile, onBack, onSave }) {
     const managers = management.split(';').map(m => m.trim()).filter(Boolean);
     if (managers.length > 0) {
       try {
-        const existing = JSON.parse(localStorage.getItem('tool_mgmt_users_v1') || '{}');
+        const existing = getMgmtUsers();
         managers.forEach(m => { existing[m] = true; });
-        localStorage.setItem('tool_mgmt_users_v1', JSON.stringify(existing));
+        saveMgmtUsers(existing);
       } catch(e) {}
     }
     // Auto-register artist as a user profile
@@ -2835,9 +2920,9 @@ function ArtistEditScreen({ artistData, onBack, onSave }) {
     const managers = management.split(';').map(m => m.trim()).filter(Boolean);
     if (managers.length > 0) {
       try {
-        const existing = JSON.parse(localStorage.getItem('tool_mgmt_users_v1') || '{}');
+        const existing = getMgmtUsers();
         managers.forEach(m => { existing[m] = true; });
-        localStorage.setItem('tool_mgmt_users_v1', JSON.stringify(existing));
+        saveMgmtUsers(existing);
       } catch(e) {}
     }
     const updated = {
@@ -2946,12 +3031,17 @@ export default function App() {
   const [currentSongAnswers, setCurrentSongAnswers] = useState({});
 
   const [hasSaved, setHasSaved] = useState(false);
+  const [syncing, setSyncing] = useState(true);
+
   useEffect(() => {
-    const saved = loadState();
-    if (saved && saved.phase && saved.phase !== "welcome") {
-      setHasSaved(true);
-      // Don't auto-jump — user must login first
-    }
+    // Sync from Firestore on load, then check for saved session
+    syncFromFirestore().finally(() => {
+      setSyncing(false);
+      const saved = loadState();
+      if (saved && saved.phase && saved.phase !== "welcome") {
+        setHasSaved(true);
+      }
+    });
   }, []);
 
   function resumeSaved() {
@@ -3103,7 +3193,7 @@ export default function App() {
   // ══════════════════════════════════════════
 
   // SPLASH
-  if (showSplash) return <SplashScreen onDone={() => setShowSplash(false)}/>;
+  if (showSplash || syncing) return <SplashScreen onDone={() => setShowSplash(false)}/>;
 
   // PROFILE SELECTION
   if (!profile) return <ProfileSelect onSelect={(p) => {
