@@ -772,27 +772,36 @@ function _stripPhoto(obj) {
 // Save artist metadata only (no projects, no photos to Firestore)
 async function saveOneArtist(artist) {
   if (!artist?.id) { console.error("saveOneArtist: missing id"); return; }
-  const { projects, ...meta } = artist;
-  const metaClean = _stripPhoto({ ...meta });
-  // Update in-memory meta
-  const idx = _artistsMeta.findIndex(a => a.id === meta.id);
-  if (idx >= 0) _artistsMeta[idx] = metaClean; else _artistsMeta.push(metaClean);
-  // Also upsert projects if provided
+  const { projects, photo, answers, ...coreMeta } = artist;
+  // metaClean: no photo, no answers, no projects → always tiny
+  const metaClean = { ...coreMeta };
+  // Keep full object in memory for UI
+  const fullMeta = { ...coreMeta, photo: photo || null, answers: answers || {} };
+  const idx = _artistsMeta.findIndex(a => a.id === artist.id);
+  if (idx >= 0) _artistsMeta[idx] = fullMeta; else _artistsMeta.push(fullMeta);
+  // Upsert projects if provided
   if (projects) {
     projects.forEach(p => {
       const pi = _projects.findIndex(x => x.id === p.id);
-      const proj = { ..._stripPhoto(p), artistId: meta.id };
+      const proj = { ..._stripPhoto(p), artistId: artist.id };
       if (pi >= 0) _projects[pi] = proj; else _projects.push(proj);
     });
   }
   _saveCache();
   notifyListeners();
+  // Write to Firestore — just core meta (always < 10KB)
   try {
-    await setDoc(doc(db, "artists", meta.id), metaClean);
-    console.log("✅ artist saved:", meta.name);
+    await setDoc(doc(db, "artists", artist.id), metaClean);
+    console.log("✅ artist saved:", artist.name);
   } catch(e) {
     console.error("❌ artist save failed:", e.code, e.message);
     _firebaseError = `${e.code}: ${e.message}`; notifyListeners();
+  }
+  // Save answers separately
+  if (answers && Object.keys(answers).length > 0) {
+    const compressed = {};
+    Object.entries(answers).forEach(([k,v]) => { if (v === true) compressed[k] = true; });
+    setDoc(doc(db, "artistAnswers", artist.id), compressed).catch(() => {});
   }
 }
 
@@ -802,7 +811,15 @@ async function saveProject(project, artistId) {
   // Compress answers: only store true values
   const answers = {};
   Object.entries(project.answers || {}).forEach(([k,v]) => { if (v === true) answers[k] = true; });
-  const p = { ..._stripPhoto(project), artistId, answers };
+  // Strip photo and flatten linkedArtist to just id+name (avoid storing full artist object)
+  const { linkedArtist, photo, ...rest } = project;
+  const p = {
+    ...rest,
+    artistId,
+    answers,
+    photo: (photo && !photo.startsWith('data:')) ? photo : null,
+    linkedArtist: linkedArtist ? { id: linkedArtist.id, name: linkedArtist.name } : null,
+  };
   // Update in-memory
   const pi = _projects.findIndex(x => x.id === p.id);
   if (pi >= 0) _projects[pi] = p; else _projects.push(p);
@@ -896,8 +913,7 @@ function startRealtimeSync(onReady) {
     _artistsMeta = snap.docs.map(d => {
       const fb = { id: d.id, ...d.data() };
       const local = localMeta.find(a => a.id === fb.id);
-      // Restore photo from local cache (not stored in Firestore)
-      return { ...fb, photo: fb.photo || local?.photo || null };
+      return { ...fb, photo: fb.photo || local?.photo || null, answers: fb.answers || local?.answers || {} };
     });
     _saveCache();
     notifyListeners();
@@ -934,6 +950,15 @@ function startRealtimeSync(onReady) {
   }, err => {
     console.warn("Config snapshot error", err);
     if (!configReady) { configReady = true; checkReady(); }
+  });
+
+  onSnapshot(collection(db, "artistAnswers"), snap => {
+    snap.docs.forEach(d => {
+      const idx = _artistsMeta.findIndex(a => a.id === d.id);
+      if (idx >= 0) _artistsMeta[idx] = { ..._artistsMeta[idx], answers: d.data() };
+    });
+    _saveCache();
+    notifyListeners();
   });
 
   onSnapshot(doc(db, "config", "artistUsers"), snap => {
@@ -2014,8 +2039,9 @@ function ArtistListScreen({ profile, onBack, onSelect, onCreate, liveArtists }) 
 // ═══════════════════════════════════════════
 // PROJECT (SONG) LIST SCREEN
 // ═══════════════════════════════════════════
-function ProjectListScreen({ profile, onBack, onCreate }) {
+function ProjectListScreen({ profile, onBack, onCreate, onSelect }) {
   const t = theme(isDark());
+  useFirebaseStore();
   const allArtists = getArtists();
   const myArtists = profile.type === 'admin'
     ? allArtists
@@ -2025,16 +2051,27 @@ function ProjectListScreen({ profile, onBack, onCreate }) {
     ? allArtists.filter(a => a.management && a.management.split(';').map(m => m.trim().toLowerCase()).includes(profile.name.toLowerCase()))
     : allArtists.filter(a => a.name?.toLowerCase() === profile.name?.toLowerCase());
 
-  const allProjects = myArtists.flatMap(a =>
-    (a.projects || []).map(p => ({ ...p, artistName: a.name, artistPhoto: a.photo }))
-  );
+  const myArtistIds = new Set(myArtists.map(a => a.id));
+  const allProjects = _projects
+    .filter(p => myArtistIds.has(p.artistId))
+    .map(p => {
+      const artist = myArtists.find(a => a.id === p.artistId);
+      return { ...p, artistName: artist?.name || p.artistName, artistPhoto: artist?.photo || null };
+    })
+    .sort((a, b) => {
+      const da = a.date ? new Date(a.date) : a.createdAt ? new Date(a.createdAt) : new Date(0);
+      const db2 = b.date ? new Date(b.date) : b.createdAt ? new Date(b.createdAt) : new Date(0);
+      return db2 - da;
+    });
 
   return (
     <div style={{ minHeight:"100dvh", background:t.bg, display:"flex", flexDirection:"column" }}>
       <div style={{ padding:"16px 20px", paddingTop:"max(16px, env(safe-area-inset-top,16px))", display:"flex", alignItems:"center", justifyContent:"space-between", borderBottom:`1px solid ${t.border}` }}>
         <button onClick={onBack} style={{ background:"transparent", border:"none", color:t.text2, fontFamily:"Arial,sans-serif", fontSize:"15px", cursor:"pointer", padding:0 }}>← Atrás</button>
         <div style={{ fontFamily:"Arial,sans-serif", fontSize:"15px", fontWeight:"700", color:t.text }}>Catálogo</div>
-        <button onClick={onCreate} style={{ background:"transparent", border:"none", color:t.accent, fontFamily:"Arial,sans-serif", fontSize:"15px", fontWeight:"700", cursor:"pointer", padding:0 }}>+ Nuevo</button>
+        {(profile.type === 'label' || profile.type === 'admin') ? (
+          <button onClick={onCreate} style={{ background:"transparent", border:"none", color:t.accent, fontFamily:"Arial,sans-serif", fontSize:"15px", fontWeight:"700", cursor:"pointer", padding:0 }}>+ Nuevo</button>
+        ) : <div style={{width:'50px'}}/>}
       </div>
 
       <div style={{ flex:1, overflowY:"auto", WebkitOverflowScrolling:"touch", padding:"24px 20px" }}>
@@ -2043,14 +2080,17 @@ function ProjectListScreen({ profile, onBack, onCreate }) {
             <div style={{ fontSize:"56px", marginBottom:"20px" }}>🎵</div>
             <div style={{ fontFamily:"Arial,sans-serif", fontSize:"22px", fontWeight:"700", color:t.text, marginBottom:"10px" }}>No tienes canciones todavía</div>
             <div style={{ fontFamily:"Arial,sans-serif", fontSize:"14px", color:t.text2, marginBottom:"32px", maxWidth:"260px", lineHeight:"1.5" }}>Crea tu primera canción para empezar a evaluar su presencia digital</div>
-            <button onClick={onCreate} style={{ padding:"16px 32px", background:t.accent, color:"white", border:"none", borderRadius:"14px", fontFamily:"Arial,sans-serif", fontSize:"16px", fontWeight:"700", cursor:"pointer" }}>
-              + Nuevo proyecto
-            </button>
+            {(profile.type === 'label' || profile.type === 'admin') && (
+              <button onClick={onCreate} style={{ padding:"16px 32px", background:t.accent, color:"white", border:"none", borderRadius:"14px", fontFamily:"Arial,sans-serif", fontSize:"16px", fontWeight:"700", cursor:"pointer" }}>
+                + Nuevo proyecto
+              </button>
+            )}
           </div>
         ) : (
           <div style={{ display:"flex", flexDirection:"column", gap:"10px" }}>
             {allProjects.map((p, i) => (
-              <div key={i} style={{ display:"flex", alignItems:"center", gap:"14px", padding:"16px", background:t.card, border:`1px solid ${t.border}`, borderRadius:"16px", boxShadow:`0 2px 8px ${t.shadow}` }}>
+              <button key={p.id || i} onClick={() => onSelect && onSelect(p)}
+                style={{ display:"flex", alignItems:"center", gap:"14px", padding:"16px", background:t.card, border:`1px solid ${t.border}`, borderRadius:"16px", boxShadow:`0 2px 8px ${t.shadow}`, cursor:"pointer", textAlign:"left", width:"100%" }}>
                 {p.photo ? (
                   <img src={p.photo} alt="" style={{ width:"48px", height:"48px", borderRadius:"10px", objectFit:"cover", flexShrink:0 }}/>
                 ) : (
@@ -2060,8 +2100,11 @@ function ProjectListScreen({ profile, onBack, onCreate }) {
                   <div style={{ fontFamily:"Arial,sans-serif", fontSize:"16px", fontWeight:"700", color:t.text, marginBottom:"2px" }}>{p.title || "Sin título"}</div>
                   <div style={{ fontFamily:"Arial,sans-serif", fontSize:"12px", color:t.text2 }}>{p.artistName}{p.date ? ` · ${p.date}` : ""}</div>
                 </div>
+                {p.score !== undefined && (
+                  <div style={{ fontFamily:"Arial,sans-serif", fontSize:"20px", fontWeight:"700", color:scoreColor(p.score), flexShrink:0 }}>{Math.round(p.score)}</div>
+                )}
                 <div style={{ color:t.text3, fontSize:"18px" }}>›</div>
-              </div>
+              </button>
             ))}
           </div>
         )}
@@ -3556,6 +3599,17 @@ export default function App() {
         profile={profile}
         onBack={() => setPhase("welcome")}
         onCreate={() => setPhase("song-form")}
+        onSelect={(p) => {
+          // Find the artist for this project
+          const artist = getArtists().find(a => a.id === p.artistId);
+          if (artist) {
+            setArtistData(artist);
+            setArtistAnswers(artist.answers || {});
+          }
+          setCurrentSong({ data: { ...p, linkedArtist: { id: p.artistId, name: p.artistName } }, answers: p.answers || {} });
+          setSongQIdx(0);
+          setPhase("song-home");
+        }}
       />
     );
   }
