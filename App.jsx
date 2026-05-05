@@ -991,23 +991,27 @@ function ResetButton({ onReset }) {
 }
 function SwipeCard({ question, onAnswer, currentIndex, total, answers, blockLabel, subcatLabel, phase, phaseName, photo, onHome, onGoHome, onGoBlock }) {
   const [showHint, setShowHint] = useState(false);
-  const hint = QUESTION_HINTS && QUESTION_HINTS[question.id];
   const cardRef = useRef(null);
   const startX = useRef(null);
   const currentX = useRef(0);
   const isDragging = useRef(false);
   const [dragX, setDragX] = useState(0);
-  const [leaving, setLeaving] = useState(null); // 'left'|'right'|null
-  const answered = answers[question.id];
+  const [leaving, setLeaving] = useState(null);
+
+  const hint = question && QUESTION_HINTS && QUESTION_HINTS[question.id];
+  const answered = question ? answers[question.id] : undefined;
 
   const triggerAnswer = useCallback((yes) => {
+    if (!question) return;
     setLeaving(yes ? "right" : "left");
     setTimeout(() => {
       setLeaving(null);
       setDragX(0);
       onAnswer(question.id, yes);
     }, 280);
-  }, [question.id, onAnswer]);
+  }, [question?.id, onAnswer]);
+
+  if (!question) return null;
 
   // Touch handlers
   const onTouchStart = (e) => {
@@ -1062,8 +1066,9 @@ function SwipeCard({ question, onAnswer, currentIndex, total, answers, blockLabe
 
   const progress = Math.round((currentIndex / total) * 100);
 
+  const t = theme(isDark());
   return (
-    <div style={{ display:"flex", flexDirection:"column", minHeight:"100dvh", background:"#fff", position:"relative", overflow:"hidden" }}>
+    <div style={{ display:"flex", flexDirection:"column", minHeight:"100dvh", background:t.bg, position:"relative", overflow:"hidden" }}>
 
       {/* Progress bar — top */}
       <div style={{ position:"absolute", top:0, left:0, right:0, height:"2px", background:"#f0f0f0", zIndex:10 }}>
