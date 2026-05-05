@@ -1697,31 +1697,27 @@ function ArtistHomeScreen({ artistData, artistAnswers, onBlock, onResult, onBack
         ];
 
         return (
-          <div style={{flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'8px 16px', gap:'16px', overflowY:'auto', width:'100%'}}>
-            {/* General — top, biggest */}
-            <MiniHex title="General" score={generalScore} vertices={artistVerts} getScore={getGeneralBlockScore} size={Math.min(window.innerWidth * 0.80, 380)}/>
-            {/* Perfil + Catálogo — side by side below */}
-            <div style={{display:'flex', gap:'8px', justifyContent:'center'}}>
-              <MiniHex title="Perfil" score={artistScore} vertices={artistVerts} getScore={getArtistBlockScore} onClick={onProfile} size={Math.min(window.innerWidth * 0.42, 220)}/>
-              <MiniHex title="Catálogo" score={catAvg} vertices={songVerts} getScore={getCatBlockScore} onClick={onCatalogue} size={Math.min(window.innerWidth * 0.42, 220)}/>
-            </div>
+          <div style={{flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'8px 16px', gap:'8px', overflowY:'auto', width:'100%'}}>
+            {/* General only */}
+            <MiniHex title="General" score={generalScore} vertices={artistVerts} getScore={getGeneralBlockScore} size={Math.min(window.innerWidth * 0.86, 400)}/>
           </div>
         );
       })()}
 
-
-      {/* Action buttons + back */}
+      {/* Action buttons */}
       <div style={{padding:'12px 24px', paddingBottom:'max(24px,env(safe-area-inset-bottom,24px))', display:'flex', flexDirection:'column', gap:'10px'}}>
-        <button onClick={onCatalogue}
-          style={{width:'100%', padding:'15px', background:t.card, border:`1.5px solid ${t.border}`, borderRadius:'14px', fontFamily:'Arial,sans-serif', fontSize:'15px', fontWeight:'700', color:t.text, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:'8px', boxShadow:`0 2px 8px ${t.shadow}`}}>
-          <span style={{fontSize:'18px'}}>🎵</span> Catálogo
-        </button>
-        <button onClick={onPending}
-          style={{width:'100%', padding:'15px', background:t.bg2, border:`1.5px solid ${t.border}`, borderRadius:'14px', fontFamily:'Arial,sans-serif', fontSize:'15px', fontWeight:'600', color:t.text, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:'8px'}}>
-          <span style={{fontSize:'16px'}}>📋</span> Tareas pendientes
-        </button>
+        <div style={{display:'flex', gap:'10px'}}>
+          <button onClick={onProfile}
+            style={{flex:1, padding:'16px', background:t.card, border:`1.5px solid ${t.border}`, borderRadius:'14px', fontFamily:'Arial,sans-serif', fontSize:'16px', fontWeight:'700', color:t.text, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:'8px', boxShadow:`0 2px 8px ${t.shadow}`}}>
+            Perfil
+          </button>
+          <button onClick={onCatalogue}
+            style={{flex:1, padding:'16px', background:t.card, border:`1.5px solid ${t.border}`, borderRadius:'14px', fontFamily:'Arial,sans-serif', fontSize:'16px', fontWeight:'700', color:t.text, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:'8px', boxShadow:`0 2px 8px ${t.shadow}`}}>
+            Catálogo
+          </button>
+        </div>
         <button onClick={onBack}
-          style={{display:'block', width:'100%', padding:'15px', background:'transparent', border:`1.5px solid ${t.border}`, borderRadius:'14px', fontFamily:'Arial,sans-serif', fontSize:'15px', fontWeight:'600', color:t.text2, cursor:'pointer'}}>
+          style={{display:'block', width:'100%', padding:'14px', background:'transparent', border:`1.5px solid ${t.border}`, borderRadius:'14px', fontFamily:'Arial,sans-serif', fontSize:'15px', fontWeight:'600', color:t.text2, cursor:'pointer'}}>
           ← Roster
         </button>
       </div>
@@ -1733,7 +1729,7 @@ function ArtistHomeScreen({ artistData, artistAnswers, onBlock, onResult, onBack
 // ═══════════════════════════════════════════
 // ARTIST PROFILE SCREEN — single hexagon with all 6 blocks
 // ═══════════════════════════════════════════
-function ArtistProfileScreen({ artistData, artistAnswers, onBack, onBlock, onResult }) {
+function ArtistProfileScreen({ artistData, artistAnswers, onBack, onBlock, onResult, onPending }) {
   const t = theme(isDark());
   const rad = (deg) => deg * Math.PI / 180;
   const vertices = [
@@ -1804,6 +1800,14 @@ function ArtistProfileScreen({ artistData, artistAnswers, onBack, onBlock, onRes
           })}
         </div>
       </div>
+      {onPending && (
+        <div style={{padding:'12px 24px', paddingBottom:'max(16px,env(safe-area-inset-bottom,16px))'}}>
+          <button onClick={onPending}
+            style={{width:'100%', padding:'15px', background:t.bg2, border:`1.5px solid ${t.border}`, borderRadius:'14px', fontFamily:'Arial,sans-serif', fontSize:'15px', fontWeight:'600', color:t.text, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:'8px'}}>
+            <span style={{fontSize:'16px'}}>📋</span> Tareas pendientes
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -4193,6 +4197,7 @@ export default function App() {
         artistAnswers={artistAnswers}
         onBack={() => setPhase("artist-home")}
         onResult={() => setPhase("artist-result")}
+        onPending={() => setPhase("artist-pending")}
         onBlock={(blockId) => {
           const idx = ARTIST_BLOCKS.findIndex(b => b.id === blockId);
           if (idx === -1) return;
