@@ -3910,7 +3910,14 @@ function ProjectEditScreen({ songData, onBack, onSave }) {
   const [date, setDate] = useState(songData?.date || '');
   const [participants, setParticipants] = useState(songData?.participants || '');
   const [photo, setPhoto] = useState(songData?.photo || null);
+  const [releaseId, setReleaseId] = useState(songData?.releaseId || null);
   const fileRef = useRef();
+
+  // EP/Álbum releases belonging to same artist
+  const artistId = songData?.linkedArtist?.id || songData?.artistId;
+  const availableReleases = _projects.filter(p =>
+    (p.releaseType === 'ep' || p.releaseType === 'album') && p.artistId === artistId
+  );
 
   const handleFile = (e) => {
     const f = e.target.files[0];
@@ -3922,7 +3929,7 @@ function ProjectEditScreen({ songData, onBack, onSave }) {
 
   const handleSave = () => {
     if (!title.trim()) return;
-    onSave({ ...songData, title: title.trim(), date, participants, photo });
+    onSave({ ...songData, title: title.trim(), date, participants, photo, releaseId: releaseId || null });
   };
 
   return (
@@ -3987,6 +3994,35 @@ function ProjectEditScreen({ songData, onBack, onSave }) {
             style={{display:'block', width:'100%', background:'transparent', border:'none', borderBottom:`1.5px solid ${t.border}`, padding:'10px 0', fontFamily:'Arial,sans-serif', fontSize:'17px', color:t.text, outline:'none', WebkitAppearance:'none'}}
           />
         </div>
+
+        {/* Incluir en EP / Álbum */}
+        {availableReleases.length > 0 && (
+          <div style={{marginBottom:'28px'}}>
+            <div style={{fontFamily:'Arial,sans-serif', fontSize:'11px', fontWeight:'700', color:t.text3, textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:'12px'}}>Incluir en EP / Álbum</div>
+            <div style={{display:'flex', flexDirection:'column', gap:'8px'}}>
+              {/* None option */}
+              <button onClick={() => setReleaseId(null)}
+                style={{display:'flex', alignItems:'center', gap:'12px', padding:'12px 14px', background:'transparent', border:`1.5px solid ${!releaseId ? t.text : t.border}`, borderRadius:'12px', cursor:'pointer', textAlign:'left', width:'100%'}}>
+                <div style={{width:'20px', height:'20px', borderRadius:'50%', border:`2px solid ${!releaseId ? t.text : t.border}`, background: !releaseId ? t.text : 'transparent', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0}}>
+                  {!releaseId && <div style={{width:'8px', height:'8px', borderRadius:'50%', background:t.bg}}/>}
+                </div>
+                <div style={{fontFamily:'Arial,sans-serif', fontSize:'14px', color: !releaseId ? t.text : t.text2, fontWeight: !releaseId ? '700' : '400'}}>Sin release</div>
+              </button>
+              {availableReleases.map(r => (
+                <button key={r.id} onClick={() => setReleaseId(r.id)}
+                  style={{display:'flex', alignItems:'center', gap:'12px', padding:'12px 14px', background:'transparent', border:`1.5px solid ${releaseId === r.id ? t.accent : t.border}`, borderRadius:'12px', cursor:'pointer', textAlign:'left', width:'100%'}}>
+                  <div style={{width:'20px', height:'20px', borderRadius:'50%', border:`2px solid ${releaseId === r.id ? t.accent : t.border}`, background: releaseId === r.id ? t.accent : 'transparent', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0}}>
+                    {releaseId === r.id && <div style={{width:'8px', height:'8px', borderRadius:'50%', background:'white'}}/>}
+                  </div>
+                  <div style={{flex:1, minWidth:0}}>
+                    <div style={{fontFamily:'Arial,sans-serif', fontSize:'14px', color: releaseId === r.id ? t.text : t.text2, fontWeight: releaseId === r.id ? '700' : '400', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{r.title}</div>
+                    <div style={{fontFamily:'Arial,sans-serif', fontSize:'10px', color:t.text3, textTransform:'uppercase', letterSpacing:'0.06em', marginTop:'1px'}}>{r.releaseType === 'album' ? 'Álbum' : 'EP'}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
       </div>
 
