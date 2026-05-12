@@ -2375,10 +2375,28 @@ function ProjectListScreen({ profile, onBack, onCreate, onSelect }) {
                   <div style={{ width:"48px", height:"48px", borderRadius:"10px", background:t.bg2, border:`1px solid ${t.border}`, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, fontSize:"22px" }}>🎵</div>
                 )}
                 <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ fontFamily:"Arial,sans-serif", fontSize:"16px", fontWeight:"700", color:t.text, marginBottom:"2px" }}>{p.title || "Sin título"}</div>
+                  <div style={{ display:'flex', alignItems:'center', gap:'6px', marginBottom:'2px' }}>
+                    <div style={{ fontFamily:"Arial,sans-serif", fontSize:"16px", fontWeight:"700", color:t.text }}>{p.title || "Sin título"}</div>
+                    {(p.releaseType === 'ep' || p.releaseType === 'album') && (
+                      <span style={{ fontFamily:'Arial,sans-serif', fontSize:'9px', fontWeight:'700', color:'#E8151B', border:'1px solid #E8151B44', borderRadius:'4px', padding:'1px 5px', textTransform:'uppercase', letterSpacing:'0.08em', flexShrink:0 }}>
+                        {p.releaseType === 'album' ? 'Álbum' : 'EP'}
+                      </span>
+                    )}
+                  </div>
                   <div style={{ fontFamily:"Arial,sans-serif", fontSize:"12px", color:t.text2 }}>{p.artistName}{p.date ? ` · ${p.date}` : ""}</div>
                 </div>
                 {(() => {
+                  if (p.releaseType === 'ep' || p.releaseType === 'album') {
+                    const relSongs = _projects.filter(s => s.releaseId === p.id);
+                    const scored = relSongs.filter(s => s.answers && Object.keys(s.answers).length > 0);
+                    const avg = scored.length > 0 ? Math.round(scored.reduce((acc, s) => acc + calcTotalScore(SONG_BLOCKS, s.answers), 0) / scored.length * 10) / 10 : null;
+                    return (
+                      <div style={{display:'flex', flexDirection:'column', alignItems:'flex-end', gap:'2px', flexShrink:0}}>
+                        {avg !== null && <div style={{ fontFamily:"Arial,sans-serif", fontSize:"18px", fontWeight:"700", color:scoreColor(avg) }}>{avg}</div>}
+                        <div style={{ fontFamily:"Arial,sans-serif", fontSize:"10px", color:t.text3 }}>{relSongs.length} {relSongs.length === 1 ? 'canción' : 'canciones'}</div>
+                      </div>
+                    );
+                  }
                   const liveScore = p.score !== undefined ? p.score : (p.answers && Object.keys(p.answers).length > 0 ? Math.round(calcTotalScore(SONG_BLOCKS, p.answers) * 10) / 10 : null);
                   return liveScore !== null ? (
                     <div style={{ fontFamily:"Arial,sans-serif", fontSize:"20px", fontWeight:"700", color:scoreColor(liveScore), flexShrink:0 }}>{liveScore}</div>
@@ -2557,11 +2575,12 @@ function NewArtistForm({ profile, onBack, onSave }) {
 // ═══════════════════════════════════════════
 // PROJECT FORM — with artist linkage
 // ═══════════════════════════════════════════
-function ProjectForm({ profile, songNum, onBack, onSubmit, prefilledArtist }) {
+function ProjectForm({ profile, songNum, onBack, onSubmit, prefilledArtist, prefilledReleaseType, prefilledReleaseId }) {
   const t = theme(isDark());
   const [title, setTitle] = useState('');
   const [date, setDate] = useState('');
   const [participants, setParticipants] = useState('');
+  const [releaseType, setReleaseType] = useState(prefilledReleaseType || 'single');
   const [artistInput, setArtistInput] = useState(prefilledArtist?.name || '');
   const [linkedArtist, setLinkedArtist] = useState(prefilledArtist || null);
   const [artistError, setArtistError] = useState('');
@@ -2578,7 +2597,7 @@ function ProjectForm({ profile, songNum, onBack, onSubmit, prefilledArtist }) {
 
   const handleSubmit = () => {
     if (!title.trim()) return;
-    onSubmit({ title, date, participants, artistName: linkedArtist?.name || artistInput, linkedArtist });
+    onSubmit({ title, date, participants, releaseType, releaseId: prefilledReleaseId || null, artistName: linkedArtist?.name || artistInput, linkedArtist });
   };
 
   return (
@@ -2590,6 +2609,21 @@ function ProjectForm({ profile, songNum, onBack, onSubmit, prefilledArtist }) {
       </div>
 
       <div style={{flex:1, overflowY:'auto', WebkitOverflowScrolling:'touch', padding:'32px 24px'}}>
+
+        {/* Tipo de release — only when not locked inside an EP/Álbum */}
+        {!prefilledReleaseId && (
+          <div style={{marginBottom:'28px'}}>
+            <div style={{fontFamily:'Arial,sans-serif', fontSize:'11px', fontWeight:'700', color:t.text3, textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:'12px'}}>Tipo</div>
+            <div style={{display:'flex', gap:'8px'}}>
+              {[{id:'single',label:'Single'},{id:'ep',label:'EP'},{id:'album',label:'Álbum'}].map(opt => (
+                <button key={opt.id} onClick={() => setReleaseType(opt.id)}
+                  style={{flex:1, padding:'11px 0', borderRadius:'12px', border:`1.5px solid ${releaseType === opt.id ? t.text : t.border}`, background: releaseType === opt.id ? t.text : 'transparent', color: releaseType === opt.id ? t.bg : t.text2, fontFamily:'Arial,sans-serif', fontSize:'14px', fontWeight:'700', cursor:'pointer', transition:'all 0.15s'}}>
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Artista */}
         <div style={{marginBottom:'28px'}}>
@@ -2648,6 +2682,225 @@ function ProjectForm({ profile, songNum, onBack, onSubmit, prefilledArtist }) {
         <button onClick={handleSubmit} disabled={!title.trim()}
           style={{display:'block', width:'100%', padding:'17px', background: title.trim() ? t.text : t.bg2, color: title.trim() ? t.bg : t.text3, border:'none', borderRadius:'14px', fontFamily:'Arial,sans-serif', fontSize:'17px', fontWeight:'700', cursor: title.trim() ? 'pointer' : 'default', transition:'all 0.2s'}}>
           Continuar →
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════
+// RELEASE HOME SCREEN — EP / Álbum home
+// Shows weighted avg hexagon + song list
+// ═══════════════════════════════════════════
+function ReleaseHomeScreen({ releaseData, onBack, onEdit, onAddSong, onOpenSong }) {
+  const t = theme(isDark());
+  const dark = isDark();
+  const rad = (deg) => deg * Math.PI / 180;
+
+  // Get all songs belonging to this release
+  const releaseSongs = _projects
+    .filter(p => p.releaseId === releaseData?.id)
+    .map(p => ({
+      ...p,
+      liveScore: p.answers && Object.keys(p.answers).length > 0
+        ? Math.round(calcTotalScore(SONG_BLOCKS, p.answers) * 10) / 10
+        : null,
+    }));
+
+  // Weighted average across songs (only scored ones)
+  const scoredSongs = releaseSongs.filter(s => s.liveScore !== null);
+  const avgScore = scoredSongs.length > 0
+    ? Math.round(scoredSongs.reduce((acc, s) => acc + s.liveScore, 0) / scoredSongs.length * 10) / 10
+    : null;
+
+  // Per-block average across songs
+  const getAvgBlockScore = (blockId) => {
+    if (blockId === 'result') return avgScore;
+    const scored = releaseSongs.filter(s => {
+      const block = SONG_BLOCKS.find(b => b.id === blockId);
+      return block && block.subcats.some(sub => sub.items.some(i => s.answers?.[i.id] !== undefined));
+    });
+    if (!scored.length) return null;
+    const sum = scored.reduce((acc, s) => {
+      const block = SONG_BLOCKS.find(b => b.id === blockId);
+      return acc + (block ? calcBlockScore(block, s.answers || {}) : 0);
+    }, 0);
+    return Math.round(sum / scored.length * 10) / 10;
+  };
+
+  const vertices = [
+    { id:'result',    label:'Media',     angle: -90 },
+    { id:'social',    label:'Social',    angle: -30 },
+    { id:'ytvideo',   label:'Video',     angle:  30 },
+    { id:'rights',    label:'Rights',    angle:  90 },
+    { id:'authority', label:'Authority', angle: 150 },
+    { id:'dsps',      label:'DSPs',      angle: 210 },
+  ];
+
+  const S = 300, cx = S/2, cy = S/2, R = 108;
+
+  const sortedPoints = [...vertices].sort((a,b) => a.angle - b.angle).map(v => ({
+    x: cx + R * Math.cos(rad(v.angle)),
+    y: cy + R * Math.sin(rad(v.angle)),
+  }));
+
+  const dataPolygon = (() => {
+    const sorted = [...vertices].sort((a, b) => a.angle - b.angle);
+    const pts = sorted.map(v => {
+      const score = getAvgBlockScore(v.id);
+      if (score === null) return null;
+      const pct = Math.max(0.01, score / 100);
+      return { x: cx + R * pct * Math.cos(rad(v.angle)), y: cy + R * pct * Math.sin(rad(v.angle)) };
+    }).filter(Boolean);
+    if (pts.length < 2) return null;
+    return pts.map((p,i) => `${i===0?'M':'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ') + ' Z';
+  })();
+
+  const typeLabel = releaseData?.releaseType === 'album' ? 'Álbum' : releaseData?.releaseType === 'ep' ? 'EP' : 'Release';
+
+  return (
+    <div style={{minHeight:'100dvh', background:t.bg, display:'flex', flexDirection:'column'}}>
+      {/* Header */}
+      <div style={{padding:'16px 20px', paddingTop:'max(16px,env(safe-area-inset-top,16px))', display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:`1px solid ${t.border}`}}>
+        <button onClick={onBack} style={{background:'transparent', border:'none', color:t.text2, fontFamily:'Arial,sans-serif', fontSize:'15px', cursor:'pointer', padding:0}}>← Atrás</button>
+        <div style={{textAlign:'center'}}>
+          <div style={{fontFamily:'Arial,sans-serif', fontSize:'10px', fontWeight:'700', color:t.text3, letterSpacing:'0.12em', textTransform:'uppercase'}}>{typeLabel}</div>
+          <div style={{fontFamily:'Arial,sans-serif', fontSize:'15px', fontWeight:'700', color:t.text, marginTop:'1px'}}>{releaseData?.title || 'Sin título'}</div>
+        </div>
+        <button onClick={onEdit} style={{background:'transparent', border:'none', color:t.text3, fontFamily:'Arial,sans-serif', fontSize:'15px', cursor:'pointer', padding:0}}>✎</button>
+      </div>
+
+      {/* Hexagon */}
+      <div style={{display:'flex', justifyContent:'center', padding:'8px 0 0'}}>
+        <div style={{position:'relative', width:`${S}px`, height:`${S}px`}}>
+          <svg width={S} height={S} viewBox={`0 0 ${S} ${S}`} style={{position:'absolute', inset:0, pointerEvents:'none'}}>
+            {[0.33, 0.66, 1].map((scale, ri) => {
+              const pts = sortedPoints.map(p => ({ x: cx+(p.x-cx)*scale, y: cy+(p.y-cy)*scale }));
+              const path = pts.map((p,i) => `${i===0?'M':'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ') + ' Z';
+              return <path key={ri} d={path} fill="none" stroke={t.border} strokeWidth="1"/>;
+            })}
+            {sortedPoints.map((p,i) => (
+              <line key={i} x1={cx} y1={cy} x2={p.x.toFixed(1)} y2={p.y.toFixed(1)} stroke={t.border} strokeWidth="1"/>
+            ))}
+            {dataPolygon && <path d={dataPolygon} fill="rgba(232,21,27,0.15)" stroke="#E8151B" strokeWidth="2" strokeLinejoin="round"/>}
+            {vertices.map(v => {
+              const score = getAvgBlockScore(v.id);
+              if (score === null) return null;
+              const pct = score / 100;
+              const px = cx + R * pct * Math.cos(rad(v.angle));
+              const py = cy + R * pct * Math.sin(rad(v.angle));
+              return <circle key={v.id} cx={px.toFixed(1)} cy={py.toFixed(1)} r="4" fill="#E8151B"/>;
+            })}
+          </svg>
+
+          {vertices.map(v => {
+            const px = cx + R * Math.cos(rad(v.angle));
+            const py = cy + R * Math.sin(rad(v.angle));
+            const score = getAvgBlockScore(v.id);
+            const isResult = v.id === 'result';
+            const hasScore = score !== null;
+            return (
+              <div key={v.id}
+                style={{position:'absolute', left:`${px}px`, top:`${py}px`, transform:'translate(-50%,-50%)',
+                  display:'flex', flexDirection:'column', alignItems:'center', gap:'2px',
+                  background: isResult ? t.accent : hasScore ? t.text : t.bg,
+                  border:`1.5px solid ${isResult ? t.accent : hasScore ? t.text : t.border}`,
+                  borderRadius:'20px', padding:'5px 10px', minWidth:'54px', pointerEvents:'none'}}>
+                {!isResult && (
+                  <div style={{fontFamily:'Arial,sans-serif', fontSize:'8px', fontWeight:'700',
+                    color: hasScore ? t.bg : t.text2, letterSpacing:'0.06em', textTransform:'uppercase', whiteSpace:'nowrap'}}>
+                    {v.label}
+                  </div>
+                )}
+                {(hasScore || isResult) && (
+                  <div style={{fontFamily:'Arial,sans-serif', fontSize: isResult ? '18px' : '11px',
+                    fontWeight:'700', color: isResult?'#fff':t.bg, lineHeight:1}}>{score}</div>
+                )}
+                {!hasScore && !isResult && (
+                  <div style={{fontFamily:'Arial,sans-serif', fontSize:'7px', color:t.text3}}>—</div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Stats row */}
+      {releaseSongs.length > 0 && (
+        <div style={{display:'flex', justifyContent:'center', gap:'24px', padding:'0 24px 12px'}}>
+          <div style={{textAlign:'center'}}>
+            <div style={{fontFamily:'Arial,sans-serif', fontSize:'18px', fontWeight:'700', color:t.text}}>{releaseSongs.length}</div>
+            <div style={{fontFamily:'Arial,sans-serif', fontSize:'10px', color:t.text3, textTransform:'uppercase', letterSpacing:'0.08em'}}>{releaseSongs.length === 1 ? 'canción' : 'canciones'}</div>
+          </div>
+          {avgScore !== null && (
+            <div style={{textAlign:'center'}}>
+              <div style={{fontFamily:'Arial,sans-serif', fontSize:'18px', fontWeight:'700', color:scoreColor(avgScore)}}>{avgScore}</div>
+              <div style={{fontFamily:'Arial,sans-serif', fontSize:'10px', color:t.text3, textTransform:'uppercase', letterSpacing:'0.08em'}}>media</div>
+            </div>
+          )}
+          {scoredSongs.length > 0 && (
+            <div style={{textAlign:'center'}}>
+              <div style={{fontFamily:'Arial,sans-serif', fontSize:'18px', fontWeight:'700', color:t.text}}>{Math.round(scoredSongs.reduce((a,s) => a + s.liveScore, 0) / scoredSongs.length)}%</div>
+              <div style={{fontFamily:'Arial,sans-serif', fontSize:'10px', color:t.text3, textTransform:'uppercase', letterSpacing:'0.08em'}}>cobertura</div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Song list */}
+      <div style={{flex:1, overflowY:'auto', WebkitOverflowScrolling:'touch', padding:'0 20px 12px'}}>
+        {/* Section header */}
+        <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'12px', paddingTop:'4px'}}>
+          <div style={{fontFamily:'Arial,sans-serif', fontSize:'11px', fontWeight:'700', color:t.text3, letterSpacing:'0.1em', textTransform:'uppercase'}}>
+            Canciones
+          </div>
+          <button onClick={onAddSong}
+            style={{background:t.accent, border:'none', color:'white', fontFamily:'Arial,sans-serif', fontSize:'12px', fontWeight:'700', cursor:'pointer', padding:'6px 14px', borderRadius:'20px'}}>
+            + Añadir
+          </button>
+        </div>
+
+        {releaseSongs.length === 0 ? (
+          <div style={{display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:'160px', textAlign:'center'}}>
+            <div style={{fontSize:'40px', marginBottom:'12px'}}>🎵</div>
+            <div style={{fontFamily:'Arial,sans-serif', fontSize:'16px', fontWeight:'700', color:t.text, marginBottom:'6px'}}>Sin canciones todavía</div>
+            <div style={{fontFamily:'Arial,sans-serif', fontSize:'13px', color:t.text2}}>Añade la primera canción a este {typeLabel.toLowerCase()}</div>
+          </div>
+        ) : (
+          <div style={{display:'flex', flexDirection:'column', gap:'8px'}}>
+            {releaseSongs.map((song, i) => (
+              <button key={song.id || i} onClick={() => onOpenSong(song)}
+                style={{display:'flex', alignItems:'center', gap:'12px', padding:'14px', background:t.card, border:`1px solid ${t.border}`, borderRadius:'14px', cursor:'pointer', textAlign:'left', width:'100%'}}>
+                {song.photo ? (
+                  <img src={song.photo} alt="" style={{width:'44px', height:'44px', borderRadius:'8px', objectFit:'cover', flexShrink:0}}/>
+                ) : (
+                  <div style={{width:'44px', height:'44px', borderRadius:'8px', background:t.bg2, border:`1px solid ${t.border}`, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0}}>
+                    <span style={{fontSize:'20px'}}>🎵</span>
+                  </div>
+                )}
+                <div style={{flex:1, minWidth:0}}>
+                  <div style={{fontFamily:'Arial,sans-serif', fontSize:'15px', fontWeight:'700', color:t.text, marginBottom:'2px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{song.title || 'Sin título'}</div>
+                  {song.participants && (
+                    <div style={{fontFamily:'Arial,sans-serif', fontSize:'12px', color:t.text2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{song.participants}</div>
+                  )}
+                </div>
+                {song.liveScore !== null ? (
+                  <div style={{fontFamily:'Arial,sans-serif', fontSize:'18px', fontWeight:'700', color:scoreColor(song.liveScore), flexShrink:0}}>{song.liveScore}</div>
+                ) : (
+                  <div style={{fontFamily:'Arial,sans-serif', fontSize:'11px', color:t.text3, flexShrink:0}}>—</div>
+                )}
+                <div style={{color:t.text3, fontSize:'16px'}}>›</div>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Bottom back button */}
+      <div style={{padding:'12px 20px', paddingBottom:'max(16px,env(safe-area-inset-bottom,16px))', borderTop:`1px solid ${t.border}`}}>
+        <button onClick={onBack}
+          style={{display:'block', width:'100%', padding:'15px', background:'transparent', border:`1.5px solid ${t.border}`, borderRadius:'14px', fontFamily:'Arial,sans-serif', fontSize:'15px', fontWeight:'600', color:t.text2, cursor:'pointer'}}>
+          ← Catálogo
         </button>
       </div>
     </div>
@@ -3762,6 +4015,7 @@ export default function App() {
   const [currentSong, setCurrentSong] = useState(null);
   const [songQIdx, setSongQIdx] = useState(0);
   const [currentSongAnswers, setCurrentSongAnswers] = useState({});
+  const [currentRelease, setCurrentRelease] = useState(null);
 
   const [syncing, setSyncing] = useState(true);
   // Force re-render when Firebase data changes
@@ -4051,7 +4305,7 @@ export default function App() {
       <ProjectListScreen
         profile={profile}
         onBack={() => setPhase("welcome")}
-        onCreate={() => setPhase("song-form")}
+        onCreate={() => { setCurrentRelease(null); setPhase("song-form"); }}
         onSelect={(p) => {
           // Find the artist for this project
           const artist = getArtists().find(a => a.id === p.artistId);
@@ -4059,9 +4313,15 @@ export default function App() {
             setArtistData(artist);
             setArtistAnswers(artist.answers || {});
           }
-          setCurrentSong({ data: { ...p, linkedArtist: { id: p.artistId, name: p.artistName } }, answers: p.answers || {} });
-          setSongQIdx(0);
-          setPhase("song-home");
+          // Route EP/Álbum to release-home, singles to song-home
+          if (p.releaseType === 'ep' || p.releaseType === 'album') {
+            setCurrentRelease(p);
+            setPhase("release-home");
+          } else {
+            setCurrentSong({ data: { ...p, linkedArtist: { id: p.artistId, name: p.artistName } }, answers: p.answers || {} });
+            setSongQIdx(0);
+            setPhase("song-home");
+          }
         }}
       />
     );
@@ -4125,13 +4385,14 @@ export default function App() {
 
   // SONG HOME — project hexagon
   if (phase === "song-home") {
+    const songBackDest = currentSong?.data?.releaseId ? "release-home" : "welcome";
     return (
       <>
         {errorBanner}
         <ProjectHomeScreen
           songData={currentSong?.data}
           songAnswers={currentSong?.answers || {}}
-          onBack={() => setPhase("welcome")}
+          onBack={() => setPhase(songBackDest)}
           onEdit={() => setPhase("project-edit")}
           onResult={() => setPhase("song-result")}
           onPending={() => setPhase("song-pending")}
@@ -4270,6 +4531,7 @@ export default function App() {
         onPending={() => setPhase("artist-pending")}
         onProfile={() => setPhase("artist-profile")}
         onNewProject={() => {
+          setCurrentRelease(null);
           setCurrentSong({ data: { artistName: artistData.name, linkedArtist: artistData }, answers: {} });
           setSongQIdx(0);
           setPhase("song-form");
@@ -4333,17 +4595,23 @@ export default function App() {
         profile={profile}
         onBack={() => setPhase("artist-home")}
         onNewProject={() => {
+          setCurrentRelease(null);
           setCurrentSong({ data: { artistName: artistData.name, linkedArtist: { ...artistData } }, answers: {} });
           setSongQIdx(0);
           setPhase("song-form");
         }}
         onOpenProject={(p) => {
-          setCurrentSong({
-            data: { ...p, artistId: p.artistId || artistData?.id, linkedArtist: p.linkedArtist || { id: artistData?.id, name: artistData?.name } },
-            answers: p.answers || {}
-          });
-          setSongQIdx(0);
-          setPhase("song-home");
+          if (p.releaseType === 'ep' || p.releaseType === 'album') {
+            setCurrentRelease(p);
+            setPhase("release-home");
+          } else {
+            setCurrentSong({
+              data: { ...p, artistId: p.artistId || artistData?.id, linkedArtist: p.linkedArtist || { id: artistData?.id, name: artistData?.name } },
+              answers: p.answers || {}
+            });
+            setSongQIdx(0);
+            setPhase("song-home");
+          }
         }}
       />
     );
@@ -4428,7 +4696,7 @@ export default function App() {
         photo={artistData.photo}
         onContinue={() => setPhase("artist-home")}
         continueLabel="← Volver al artista"
-        onSecondary={() => { setCurrentSong({ data: {}, answers: {} }); setSongQIdx(0); setPhase("song-form"); }}
+        onSecondary={() => { setCurrentRelease(null); setCurrentSong({ data: {}, answers: {} }); setSongQIdx(0); setPhase("song-form"); }}
         secondaryLabel="Evaluar canción →"
       />
     );
@@ -4438,15 +4706,19 @@ export default function App() {
   if (phase === "song-form") {
     // Always get fresh artist from live store
     const liveArtist = artistData?.id ? (getArtists().find(a => a.id === artistData.id) || artistData) : null;
+    // Determine back destination
+    const backDest = currentRelease ? "release-home" : (liveArtist ? "artist-catalogue" : "welcome");
     return <ProjectForm
       profile={profile}
       songNum={songs.length + 1}
       prefilledArtist={liveArtist}
-      onBack={() => setPhase(liveArtist ? "artist-catalogue" : "welcome")}
+      prefilledReleaseType={currentRelease ? 'single' : undefined}
+      prefilledReleaseId={currentRelease?.id || null}
+      onBack={() => setPhase(backDest)}
       onSubmit={async (data) => {
         // Resolve artistId from every possible source
         const artistId = data.linkedArtist?.id || data.artistId || artistData?.id || null;
-        console.log("🎵 song-form submit — artistId:", artistId, "linkedArtist:", data.linkedArtist?.name, "artistData:", artistData?.name);
+        console.log("🎵 song-form submit — artistId:", artistId, "type:", data.releaseType);
         if (data.linkedArtist) setArtistData(data.linkedArtist);
         const projectId = Date.now().toString();
         const projectEntry = { ...data, id: projectId, artistId, answers: {}, createdAt: new Date().toISOString() };
@@ -4455,12 +4727,48 @@ export default function App() {
         } else {
           console.error("❌ No artistId found — project NOT saved to Firebase");
         }
-        setCurrentSong({ data: projectEntry, answers: {} });
-        setCurrentSongAnswers({});
-        setSongQIdx(0);
-        setPhase("song-home");
+        // Route: EP/Álbum → release-home; Song inside release → release-home; Single → song-home
+        if (data.releaseType === 'ep' || data.releaseType === 'album') {
+          setCurrentRelease(projectEntry);
+          setPhase("release-home");
+        } else if (data.releaseId) {
+          // Song added inside a release — go back to release-home
+          setPhase("release-home");
+        } else {
+          setCurrentSong({ data: projectEntry, answers: {} });
+          setCurrentSongAnswers({});
+          setSongQIdx(0);
+          setPhase("song-home");
+        }
       }}
     />;
+  }
+
+  // RELEASE HOME — EP / Álbum home screen
+  if (phase === "release-home") {
+    if (!currentRelease) { setPhase("song-list"); return null; }
+    return (
+      <ReleaseHomeScreen
+        releaseData={currentRelease}
+        onBack={() => setPhase("song-list")}
+        onEdit={() => {/* future: edit release */}}
+        onAddSong={() => {
+          // Pre-fill artist from release, lock releaseId
+          const artist = getArtists().find(a => a.id === currentRelease.artistId);
+          if (artist) { setArtistData(artist); setArtistAnswers(artist.answers || {}); }
+          setCurrentSong({ data: { artistName: currentRelease.artistName, linkedArtist: { id: currentRelease.artistId, name: currentRelease.artistName } }, answers: {} });
+          setSongQIdx(0);
+          setPhase("song-form");
+        }}
+        onOpenSong={(song) => {
+          const artist = getArtists().find(a => a.id === song.artistId);
+          if (artist) { setArtistData(artist); setArtistAnswers(artist.answers || {}); }
+          setCurrentSong({ data: { ...song, linkedArtist: { id: song.artistId, name: song.artistName } }, answers: song.answers || {} });
+          setSongQIdx(0);
+          setPhase("song-home");
+        }}
+      />
+    );
   }
 
   // SONG QUESTIONS
