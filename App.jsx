@@ -2054,41 +2054,31 @@ function SplashScreen({ onDone }) {
 function ProfileSelect({ onSelect }) {
   const t = theme(isDark());
   const [name, setName] = useState('');
+  const [password, setPassword] = useState('');
+  const [step, setStep] = useState('name'); // 'name' | 'password'
   const [error, setError] = useState('');
 
   const handleEnter = () => {
     const n = name.trim();
     if (!n) { setError('Escribe tu nombre'); return; }
 
-    // Admin
     if (n.toLowerCase() === 'admin') {
-      onSelect({ type: 'admin', name: 'Admin' }); return;
+      if (step === 'name') {
+        setStep('password');
+        setError('');
+        return;
+      }
+      // password step
+      if (password === 'Fedora') {
+        onSelect({ type: 'admin', name: 'Admin' });
+      } else {
+        setError('Contraseña incorrecta');
+      }
+      return;
     }
 
-    // Label users — case-insensitive
-    const labelUsers = getLabelUsers();
-    const labelMatch = Object.keys(labelUsers).find(k => k.toLowerCase() === n.toLowerCase());
-    if (labelMatch) {
-      onSelect({ type: 'label', name: labelMatch }); return;
-    }
-
-    // Management — check mgmt users store AND artists
-    const allArtists = getArtists();
-    const mgmtUsers = getMgmtUsers();
-    const mgmtMatch = Object.keys(mgmtUsers).find(k => k.toLowerCase() === n.toLowerCase());
-    if (mgmtMatch) { onSelect({ type: 'management', name: mgmtMatch }); return; }
-    const isManager = allArtists.some(a => a.management && a.management.split(';').map(m => m.trim().toLowerCase()).includes(n.toLowerCase()));
-    if (isManager) { onSelect({ type: 'management', name: n }); return; }
-
-    // Artist — check artist users store first, then artists DB
-    const artistUsers = getArtistUsers();
-    const artistUserMatch = Object.keys(artistUsers).find(k => k.toLowerCase() === n.toLowerCase());
-    const artistMatch = allArtists.find(a => a.name && a.name.toLowerCase() === n.toLowerCase());
-    if (artistUserMatch || artistMatch) {
-      onSelect({ type: 'artist', name: artistMatch?.name || artistUserMatch || n }); return;
-    }
-
-    setError('No te encontramos. Comprueba tu nombre.');
+    // All other profiles disabled for now
+    setError('Acceso no disponible. Contacta con el administrador.');
   };
 
   return (
@@ -2097,14 +2087,28 @@ function ProfileSelect({ onSelect }) {
       <img src={RIMAS_LOGO} alt="Ri+D" style={{width:'56px', height:'56px', objectFit:'contain', marginBottom:'56px', filter: isDark() ? 'invert(1)' : 'none'}}/>
 
       <div style={{width:'100%', maxWidth:'320px'}}>
-        <input
-          value={name}
-          onChange={e => { setName(e.target.value); setError(''); }}
-          onKeyDown={e => e.key === 'Enter' && handleEnter()}
-          placeholder="¿Quién eres?"
-          autoFocus
-          style={{display:'block', width:'100%', background:'transparent', border:'none', borderBottom:`1.5px solid ${error ? '#E8151B' : t.border}`, borderRadius:0, padding:'12px 0', fontFamily:'Arial,sans-serif', fontSize:'24px', fontWeight:'700', color:t.text, outline:'none', WebkitAppearance:'none', boxSizing:'border-box', textAlign:'center'}}
-        />
+        {step === 'name' ? (
+          <input
+            key="name"
+            value={name}
+            onChange={e => { setName(e.target.value); setError(''); }}
+            onKeyDown={e => e.key === 'Enter' && handleEnter()}
+            placeholder="¿Quién eres?"
+            autoFocus
+            style={{display:'block', width:'100%', background:'transparent', border:'none', borderBottom:`1.5px solid ${error ? '#E8151B' : t.border}`, borderRadius:0, padding:'12px 0', fontFamily:'Arial,sans-serif', fontSize:'24px', fontWeight:'700', color:t.text, outline:'none', WebkitAppearance:'none', boxSizing:'border-box', textAlign:'center'}}
+          />
+        ) : (
+          <input
+            key="password"
+            type="password"
+            value={password}
+            onChange={e => { setPassword(e.target.value); setError(''); }}
+            onKeyDown={e => e.key === 'Enter' && handleEnter()}
+            placeholder="Contraseña"
+            autoFocus
+            style={{display:'block', width:'100%', background:'transparent', border:'none', borderBottom:`1.5px solid ${error ? '#E8151B' : t.border}`, borderRadius:0, padding:'12px 0', fontFamily:'Arial,sans-serif', fontSize:'24px', fontWeight:'700', color:t.text, outline:'none', WebkitAppearance:'none', boxSizing:'border-box', textAlign:'center'}}
+          />
+        )}
 
         {error && (
           <div style={{fontFamily:'Arial,sans-serif', fontSize:'12px', color:'#E8151B', marginTop:'10px', textAlign:'center'}}>{error}</div>
@@ -2116,6 +2120,13 @@ function ProfileSelect({ onSelect }) {
             <path d="M13 16h8M17 12l4 4-4 4" stroke={t.text} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
         </button>
+
+        {step === 'password' && (
+          <button onClick={() => { setStep('name'); setPassword(''); setError(''); }}
+            style={{display:'block', margin:'16px auto 0', background:'transparent', border:'none', color:t.text3, fontFamily:'Arial,sans-serif', fontSize:'13px', cursor:'pointer'}}>
+            ← Volver
+          </button>
+        )}
       </div>
     </div>
   );
