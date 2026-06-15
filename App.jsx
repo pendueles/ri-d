@@ -2,6 +2,11 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { RIMAS_LOGO, ICON_ARTISTA, ICON_PROYECTO, ICON_NUEVO, LOGO_B64 } from "./data/assets";
 import { useDarkMode, isDark, theme } from "./theme/theme";
 import { calcBlockScore, calcTotalScore } from "./utils/scoring";
+import { flattenQuestions, scoreColor, scoreLabel, bgColor } from "./utils/helpers";
+import ResetButton from "./components/ui/ResetButton";
+import HomeButton from "./components/ui/HomeButton";
+import HexRadarTotal from "./components/ui/HexRadarTotal";
+import SplashScreen from "./components/ui/SplashScreen";
 import { db } from "./firebase/firebase";
 import {
   useFirebaseStore, saveState, loadState, clearState,
@@ -688,67 +693,10 @@ const SONG_BLOCKS = [
 ];
 
 
-function flattenQuestions(blocks) {
-  const qs = [];
-  blocks.forEach(block => {
-    block.subcats.forEach(sub => {
-      sub.items.forEach(item => {
-        qs.push({ ...item, blockId: block.id, blockLabel: block.label, subcatId: sub.id, subcatLabel: sub.label });
-      });
-    });
-  });
-  return qs;
-}
-
 const SONG_QUESTIONS = flattenQuestions(SONG_BLOCKS);
 
-// ═══════════════════════════════════════════
-// UTILS
-// ═══════════════════════════════════════════
-function scoreColor(s) {
-  if (s >= 75) return "#1B6AE8";
-  if (s >= 50) return "#5B9EF0";
-  if (s >= 25) return "#E8611B";
-  return "#E8151B";
-}
-
-function scoreLabel(s) {
-  if (s >= 75) return "Excelente";
-  if (s >= 50) return "Bueno";
-  if (s >= 25) return "Mejorable";
-  return "Crítico";
-}
-
-// Red palette that evolves with progress
-function bgColor(progress) {
-  // Always Rimas red — shade slightly darker at start, full red by end
-  const t = progress / 100;
-  const r = Math.round(180 + (232 - 180) * t);
-  const g = Math.round(8 + (21 - 8) * t);
-  const b = Math.round(8 + (27 - 8) * t);
-  return `rgb(${r},${g},${b})`;
-}
 
 
-
-// ═══════════════════════════════════════════
-// RESET BUTTON — shown on every screen
-// ═══════════════════════════════════════════
-function ResetButton({ onReset }) {
-  const [confirm, setConfirm] = useState(false);
-  if (confirm) return (
-    <div style={{ display:"flex", alignItems:"center", gap:"6px" }}>
-      <span style={{ fontFamily:"Arial, sans-serif", fontSize:"11px", color:"rgba(255,255,255,0.7)" }}>¿Seguro?</span>
-      <button onClick={onReset} style={{ background:"#dc2626", border:"none", color:"white", fontFamily:"Arial, sans-serif", fontSize:"11px", fontWeight:"700", padding:"4px 10px", borderRadius:"6px", cursor:"pointer" }}>Sí</button>
-      <button onClick={() => setConfirm(false)} style={{ background:"rgba(255,255,255,0.15)", border:"none", color:"white", fontFamily:"Arial, sans-serif", fontSize:"11px", padding:"4px 10px", borderRadius:"6px", cursor:"pointer" }}>No</button>
-    </div>
-  );
-  return (
-    <button onClick={() => setConfirm(true)} style={{ background:"rgba(255,255,255,0.15)", border:"1px solid rgba(255,255,255,0.25)", color:"rgba(255,255,255,0.8)", fontFamily:"Arial, sans-serif", fontSize:"11px", fontWeight:"600", padding:"5px 10px", borderRadius:"8px", cursor:"pointer" }}>
-      ⟳ Inicio
-    </button>
-  );
-}
 function SwipeCard({ question, onAnswer, currentIndex, total, answers, blockLabel, subcatLabel, phase, phaseName, photo, onHome, onGoHome, onGoBlock }) {
   const [showHint, setShowHint] = useState(false);
   const cardRef = useRef(null);
@@ -1571,151 +1519,6 @@ function ArtistProfileScreen({ artistData, artistAnswers, onBack, onBlock, onRes
     </div>
   );
 }
-
-function HexRadarTotal({ blocks, answers }) {
-  const S = 320, cx = S/2, cy = S/2 + 10, maxR = S * 0.30;
-  const ang = (i) => Math.PI * 2 * i / 6 - Math.PI / 2;
-  const ptXY = (i, pct) => [
-    cx + (Math.max(0,pct)/100) * maxR * Math.cos(ang(i)),
-    cy + (Math.max(0,pct)/100) * maxR * Math.sin(ang(i))
-  ];
-  const outerXY = (i) => [cx + maxR*Math.cos(ang(i)), cy + maxR*Math.sin(ang(i))];
-
-  const bs = {};
-  blocks.forEach(b => { bs[b.id] = Math.round(calcBlockScore(b,answers)*10)/10; });
-  const total = Math.round(calcTotalScore(blocks,answers)*10)/10;
-
-  // 0=TOTAL(top), 1=DSPs(top-right), 2=YT&Video(bot-right),
-  // 3=Authority(bottom), 4=Rights(bot-left), 5=Social(top-left)
-  const vals   = [total, bs.dsps||0, bs.ytvideo||0, bs.authority||0, bs.rights||0, bs.social||0];
-  const labels = ["TOTAL","DSPs","YT&VIDEO","AUTHORITY","RIGHTS","SOCIAL"];
-
-  const rings = [100,75,50,25];
-  const ringFills = ["#252525","#2c2c2c","#333","#3a3a3a"];
-
-  const hexPath = (pct) => rings && Array.from({length:6},(_,i)=>ptXY(i,pct))
-    .map(([x,y],i)=>`${i===0?"M":"L"}${x.toFixed(1)},${y.toFixed(1)}`).join(" ")+" Z";
-
-  const dataPath = vals.map((v,i)=>{
-    const [x,y]=ptXY(i,Math.max(1,v));
-    return `${i===0?"M":"L"}${x.toFixed(1)},${y.toFixed(1)}`;
-  }).join(" ")+" Z";
-
-  const labelR = maxR + 34;
-
-  return (
-    <div style={{display:"flex",flexDirection:"column",alignItems:"center",width:"100%"}}>
-      <svg width={S} height={S} viewBox={`0 0 ${S} ${S}`} style={{overflow:"visible",maxWidth:"100%"}}>
-        {/* Grid rings outer→inner */}
-        {rings.map((pct,ri)=>(
-          <path key={pct} d={hexPath(pct)} fill={ringFills[ri]} stroke="#555" strokeWidth="0.8"/>
-        ))}
-        {/* Spokes */}
-        {Array.from({length:6},(_,i)=>{
-          const [x2,y2]=outerXY(i);
-          return <line key={i} x1={cx.toFixed(1)} y1={cy.toFixed(1)} x2={x2.toFixed(1)} y2={y2.toFixed(1)} stroke="#666" strokeWidth="0.8"/>;
-        })}
-        {/* Data fill */}
-        <path d={dataPath} fill="rgba(255,102,120,0.20)" stroke="#ff6678" strokeWidth="2.5" strokeLinejoin="round"/>
-        {/* Dots */}
-        {vals.map((v,i)=>{
-          const [x,y]=ptXY(i,Math.max(1,v));
-          return <circle key={i} cx={x.toFixed(1)} cy={y.toFixed(1)} r={i===0?"5":"4"} fill="#ff6678" stroke={i===0?"#fff":"none"} strokeWidth="1.5"/>;
-        })}
-        {/* Labels */}
-        {labels.map((lbl,i)=>{
-          const lx=cx+labelR*Math.cos(ang(i));
-          const ly=cy+labelR*Math.sin(ang(i));
-          const anchor=lx<cx-8?"end":lx>cx+8?"start":"middle";
-          return (
-            <g key={i}>
-              <text x={lx.toFixed(1)} y={(ly-7).toFixed(1)} textAnchor={anchor} dominantBaseline="middle"
-                fontSize={i===0?"11":"9"} fontWeight="700" fontFamily="Arial,sans-serif"
-                fill={i===0?"#ffffff":"#cccccc"}>
-                {lbl}
-              </text>
-              <text x={lx.toFixed(1)} y={(ly+7).toFixed(1)} textAnchor={anchor} dominantBaseline="middle"
-                fontSize={i===0?"13":"11"} fontWeight="700" fontFamily="Arial,sans-serif"
-                fill="#ff6678">
-                {vals[i]}
-              </text>
-            </g>
-          );
-        })}
-      </svg>
-    </div>
-  );
-}
-
-// ═══════════════════════════════════════════
-// HOME BUTTON — fixed on every screen
-// ═══════════════════════════════════════════
-function HomeButton({ onHome, dark }) {
-  const t = theme(isDark());
-  const [confirm, setConfirm] = useState(false);
-  if (confirm) return (
-    <div style={{display:'flex', alignItems:'center', gap:'6px'}}>
-      <span style={{fontFamily:'Arial,sans-serif', fontSize:'11px', color:t.text2}}>¿Ir al inicio?</span>
-      <button onClick={onHome} style={{background:t.accent, border:'none', color:'#fff', fontFamily:'Arial,sans-serif', fontSize:'11px', fontWeight:'700', padding:'4px 10px', borderRadius:'6px', cursor:'pointer'}}>Sí</button>
-      <button onClick={() => setConfirm(false)} style={{background:t.bg3, border:`1px solid ${t.border}`, color:t.text2, fontFamily:'Arial,sans-serif', fontSize:'11px', padding:'4px 10px', borderRadius:'6px', cursor:'pointer'}}>No</button>
-    </div>
-  );
-  return (
-    <button onClick={() => setConfirm(true)} style={{background:'transparent', border:'none', cursor:'pointer', padding:'4px', display:'flex', alignItems:'center', gap:'4px'}}>
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={t.text2} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
-        <polyline points="9 22 9 12 15 12 15 22"/>
-      </svg>
-    </button>
-  );
-}
-
-// ═══════════════════════════════════════════
-// SPLASH SCREEN
-// ═══════════════════════════════════════════
-function SplashScreen({ onDone }) {
-  const t = theme(isDark());
-  const [scale, setScale] = useState(0.3);
-  const [opacity, setOpacity] = useState(0);
-  const [fadeOut, setFadeOut] = useState(false);
-
-  useEffect(() => {
-    // Animate in
-    setTimeout(() => { setScale(1); setOpacity(1); }, 50);
-    // Fade out after 2.2s
-    setTimeout(() => setFadeOut(true), 1000);
-    setTimeout(() => onDone(), 1300);
-  }, []);
-
-  return (
-    <div style={{
-      position:'fixed', inset:0, zIndex:9999,
-      background: t.bg,
-      display:'flex', alignItems:'center', justifyContent:'center',
-      opacity: fadeOut ? 0 : 1,
-      transition: fadeOut ? 'opacity 0.5s ease' : 'none',
-    }}>
-      <img
-        src={RIMAS_LOGO}
-        alt="Ri+D"
-        style={{
-          width:'180px',
-          height:'180px',
-          objectFit:'contain',
-          transform: `scale(${scale})`,
-          opacity,
-          transition:'transform 0.6s cubic-bezier(0.34,1.56,0.64,1), opacity 0.4s ease',
-          filter: isDark() ? 'invert(1)' : 'none',
-        }}
-      />
-    </div>
-  );
-}
-
-// ═══════════════════════════════════════════
-// PROFILE SELECTION
-// ═══════════════════════════════════════════
-
 function ProfileSelect({ onSelect }) {
   const t = theme(isDark());
   const [name, setName] = useState('');
