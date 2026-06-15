@@ -1,0 +1,3 @@
+// data/index.js
+export { RIMAS_LOGO, ICON_ARTISTA, ICON_PROYECTO, ICON_NUEVO, LOGO_B64 } from "./assets";
+export { QUESTION_HINTS, ARTIST_BLOCKS, ARTIST_QUESTIONS, SONG_BLOCKS, SONG_QUESTIONS } from "./questions";
