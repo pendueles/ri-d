@@ -12,10 +12,10 @@ export default function ArtistCatalogueScreen({ artistData, profile, onBack, onN
   const [editMode, setEditMode] = useState(false);
   const [selected, setSelected] = useState([]);
 
-  const allArtists = getArtists();
+  const allArtists = liveArtists || getArtists();
   // Always read fresh from store — artistData prop may be stale
-  const liveArtist = _artistsMeta.find(a => a.id === artistData?.id) || artistData;
-  const linkedProjects = _projects
+  const liveArtist = allArtists.find(a => a.id === artistData?.id) || artistData;
+  const linkedProjects = (liveArtist.projects || [])
     .filter(p => p.artistId === artistData?.id)
     .sort((a, b) => {
       const dateA = a.date ? new Date(a.date) : a.createdAt ? new Date(a.createdAt) : new Date(0);
