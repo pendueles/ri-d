@@ -3,7 +3,7 @@ import { useState } from "react";
 import { theme, isDark } from "../../theme/theme";
 import { scoreColor } from "../../utils/helpers";
 import { calcBlockScore, calcTotalScore } from "../../utils/scoring";
-import { getArtists } from "../../firebase/store";
+import { getArtists, useFirebaseStore, deleteProjectById } from "../../firebase/store";
 import { SONG_BLOCKS } from "../../data/questions";
 
 export default function ArtistCatalogueScreen({ artistData, profile, onBack, onNewProject, onOpenProject, liveArtists }) {
