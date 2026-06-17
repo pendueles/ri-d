@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { theme, isDark } from "../../theme/theme";
 import { scoreColor } from "../../utils/helpers";
 import { calcTotalScore } from "../../utils/scoring";
-import { getArtists, saveOneArtist } from "../../firebase/store";
+import { getArtists, saveOneArtist, useFirebaseStore, deleteArtists, getLabelUsers, getMgmtUsers, saveMgmtUsers } from "../../firebase/store";
 import { ARTIST_BLOCKS } from "../../data/questions";
 
 export default function ArtistListScreen({ profile, onBack, onSelect, onCreate, liveArtists }) {
