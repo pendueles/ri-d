@@ -52,26 +52,20 @@ let _firebaseError = null;
 export function getFirebaseError() { return _firebaseError; }
 export function clearFirebaseError() { _firebaseError = null; }
 
-// Strip base64 photos (too large for Firestore 1MB limit)
-function _stripPhoto(obj) {
-  if (!obj) return obj;
-  const r = { ...obj };
-  if (r.photo?.startsWith?.('data:')) r.photo = null;
-  return r;
-}
-
-// Save artist metadata only (no projects, no photos to Firestore)
+// Save artist metadata, including photo — photos are pre-compressed
+// client-side (see utils/helpers.js compressImage) so they comfortably
+// fit within Firestore's 1MB document limit and sync across devices.
 export async function saveOneArtist(artist) {
   if (!artist?.id) { console.error("saveOneArtist: missing id"); return; }
   const { projects, photo, answers, ...coreMeta } = artist;
-  const metaClean = { ...coreMeta };
+  const metaClean = { ...coreMeta, photo: photo || null };
   const fullMeta = { ...coreMeta, photo: photo || null, answers: answers || {} };
   const idx = _artistsMeta.findIndex(a => a.id === artist.id);
   if (idx >= 0) _artistsMeta[idx] = fullMeta; else _artistsMeta.push(fullMeta);
   if (projects) {
     projects.forEach(p => {
       const pi = _projects.findIndex(x => x.id === p.id);
-      const proj = { ..._stripPhoto(p), artistId: artist.id };
+      const proj = { ...p, artistId: artist.id };
       if (pi >= 0) _projects[pi] = proj; else _projects.push(proj);
     });
   }
@@ -91,7 +85,9 @@ export async function saveOneArtist(artist) {
   }
 }
 
-// Save a single project as its own Firestore document
+// Save a single project as its own Firestore document.
+// Photos are pre-compressed client-side (see compressImage) so the
+// resulting base64 string fits comfortably under Firestore's 1MB limit.
 export async function saveProject(project, artistId) {
   if (!project?.id || !artistId) { console.error("saveProject: missing id/artistId"); return false; }
   const answers = {};
@@ -101,7 +97,7 @@ export async function saveProject(project, artistId) {
     ...rest,
     artistId,
     answers,
-    photo: (photo && !photo.startsWith('data:')) ? photo : null,
+    photo: photo || null,
     linkedArtist: linkedArtist ? { id: linkedArtist.id, name: linkedArtist.name } : null,
   };
   const pi = _projects.findIndex(x => x.id === p.id);
