@@ -5,7 +5,7 @@ import { ARTIST_BLOCKS, ARTIST_QUESTIONS, SONG_BLOCKS, SONG_QUESTIONS,
   RIMAS_LOGO, ICON_ARTISTA, ICON_PROYECTO } from "./data";
 import { HexRadarTotal, SplashScreen } from "./components/ui";
 import { SwipeCard, SubcatSummaryScreen, BlockSummaryScreen, TotalSummaryScreen, PendingTasksScreen } from "./components/quiz";
-import { ProfileSelect, BlockHomeScreen, ArtistHomeScreen, ArtistProfileScreen, ProjectHomeScreen,
+import { ProfileSelect, HomeDashboard, BlockHomeScreen, ArtistHomeScreen, ArtistProfileScreen, ProjectHomeScreen,
   ArtistListScreen, ProjectListScreen, ArtistCatalogueScreen, ClientsListScreen, LabelManagersListScreen } from "./components/screens";
 import { NewArtistForm, ProjectForm, NewLabelManagerScreen, ArtistEditScreen, ProjectEditScreen } from "./components/forms";
 import {
@@ -232,57 +232,34 @@ export default function App() {
 
   // WELCOME
   if (phase === "welcome") {
+    const allArtistsHome = getArtists();
+    const totalArtists = allArtistsHome.length;
+    const totalCatalogue = allArtistsHome.reduce((sum, a) => sum + (a.projects?.length || 0), 0);
+    const totalTeam = Object.keys(getLabelUsers()).length;
+    const totalClients = (() => {
+      const clientSet = new Set();
+      allArtistsHome.forEach(a => {
+        if (!a.management) return;
+        a.management.split(';').map(m => m.trim()).filter(Boolean).forEach(m => clientSet.add(m));
+      });
+      return clientSet.size;
+    })();
+
     return (
-      <div style={{ minHeight:"100dvh", background:t.bg, display:"flex", flexDirection:"column" }}>
-        {errorBanner}
-        <div style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"32px 24px", paddingTop:"max(32px, env(safe-area-inset-top, 32px))" }}>
-
-          <img src={RIMAS_LOGO} alt="Ri+D" style={{ width:"180px", height:"180px", objectFit:"contain", marginBottom:"40px", filter: dark ? "invert(1)" : "none" }}/>
-
-          <div style={{ width:"100%", maxWidth:"360px", marginBottom:"20px" }}>
-
-            {/* BLOQUE 1 — TRABAJAR */}
-            <div style={{ fontFamily:"Arial,sans-serif", fontSize:"11px", fontWeight:"700", color:t.text3, letterSpacing:"0.12em", textTransform:"uppercase", marginBottom:"10px" }}>Abrir</div>
-            <div style={{ display:"flex", flexDirection:"column", gap:"8px", marginBottom:"24px" }}>
-              {[
-                { label:"Roster", icon: ICON_ARTISTA, action: () => setPhase("artist-list") },
-                { label:"Catálogo", icon: ICON_PROYECTO, action: () => setPhase("song-list") },
-              ].map((btn, i) => (
-                <button key={i} onClick={btn.action}
-                  style={{ display:"flex", alignItems:"center", justifyContent:"flex-start", gap:"14px", padding:"18px", background:t.card, border:`1px solid ${t.border}`, borderRadius:"14px", cursor:"pointer", textAlign:"left", width:"100%", boxShadow:`0 2px 8px ${t.shadow}` }}>
-                  <img src={btn.icon} alt="" style={{ width:"36px", height:"36px", objectFit:"contain", flexShrink:0 }}/>
-                  <span style={{ fontFamily:"Arial,sans-serif", fontSize:"16px", fontWeight:"700", color:t.text }}>{btn.label}</span>
-                </button>
-              ))}
-            </div>
-
-          </div>
-
-          <div style={{fontFamily:"Arial,sans-serif", fontSize:"12px", color:t.text3}}>
-            {profile.type === 'admin' ? '⚡ Admin · acceso completo' : `${profile.name} · ${profile.type}`}
-          </div>
-
-        </div>
-        <div style={{ padding:"16px 24px", paddingBottom:"max(16px, env(safe-area-inset-bottom, 16px))", display:"flex", flexDirection:"column", gap:"10px" }}>
-          {profile.type === 'admin' && (
-            <div style={{ display:'flex', gap:'10px' }}>
-              <button onClick={() => setPhase("label-managers-list")} style={{ flex:1, padding:"13px", background:"transparent", color:t.text2, border:`1px solid ${t.border}`, borderRadius:"14px", fontFamily:"Arial, sans-serif", fontSize:"14px", fontWeight:"600", cursor:"pointer" }}>
-                Equipo
-              </button>
-              <button onClick={() => setPhase("clients-list")} style={{ flex:1, padding:"13px", background:"transparent", color:t.text2, border:`1px solid ${t.border}`, borderRadius:"14px", fontFamily:"Arial, sans-serif", fontSize:"14px", fontWeight:"600", cursor:"pointer" }}>
-                Clientes
-              </button>
-              <button onClick={() => setPhase("new-label-manager")} style={{ flex:1, padding:"13px", background:"transparent", color:t.text2, border:`1px solid ${t.border}`, borderRadius:"14px", fontFamily:"Arial, sans-serif", fontSize:"14px", fontWeight:"600", cursor:"pointer" }}>
-                + Nuevo
-              </button>
-            </div>
-          )}
-
-          <button onClick={() => saveProfile(null)} style={{ display:"block", width:"100%", padding:"13px", background:"transparent", color:t.text3, border:"none", borderRadius:"14px", fontFamily:"Arial, sans-serif", fontSize:"13px", cursor:"pointer" }}>
-            Cambiar perfil
-          </button>
-        </div>
-      </div>
+      <HomeDashboard
+        logo={RIMAS_LOGO}
+        dark={dark}
+        errorBanner={errorBanner}
+        totalArtists={totalArtists}
+        totalCatalogue={totalCatalogue}
+        totalTeam={totalTeam}
+        totalClients={totalClients}
+        onArtists={() => setPhase("artist-list")}
+        onCatalogue={() => setPhase("song-list")}
+        onTeam={() => setPhase("label-managers-list")}
+        onClients={() => setPhase("clients-list")}
+        onChangeProfile={() => saveProfile(null)}
+      />
     );
   }
 
