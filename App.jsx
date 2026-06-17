@@ -15,7 +15,7 @@ import {
   getArtistUsers, saveArtistUsers, registerArtistUser,
   getLabelUsers, saveLabelUsers,
   getMgmtUsers, saveMgmtUsers,
-  startRealtimeSync,
+  startRealtimeSync, subscribeStore,
 } from "./firebase";
 
 export default function App() {
