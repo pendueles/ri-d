@@ -1,6 +1,7 @@
 // components/forms/NewArtistForm.jsx
 import { useState, useRef } from "react";
 import { theme, isDark } from "../../theme/theme";
+import { compressImage } from "../../utils/helpers";
 import { getLabelUsers, getMgmtUsers, saveMgmtUsers, registerArtistUser } from "../../firebase/store";
 
 export default function NewArtistForm({ profile, onBack, onSave }) {
@@ -18,12 +19,15 @@ export default function NewArtistForm({ profile, onBack, onSave }) {
     prev.includes(name) ? prev.filter(x => x !== name) : [...prev, name]
   );
 
-  const handleFile = (e) => {
+  const handleFile = async (e) => {
     const f = e.target.files[0];
     if (!f) return;
-    const reader = new FileReader();
-    reader.onload = ev => setPhoto(ev.target.result);
-    reader.readAsDataURL(f);
+    try {
+      const compressed = await compressImage(f);
+      setPhoto(compressed);
+    } catch (err) {
+      console.error("No se pudo procesar la imagen:", err);
+    }
   };
 
   const handleSave = () => {
