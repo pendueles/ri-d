@@ -7,5 +7,5 @@ export {
   getArtistUsers, saveArtistUsers, registerArtistUser,
   getLabelUsers, saveLabelUsers,
   getMgmtUsers, saveMgmtUsers,
-  startRealtimeSync,
+  startRealtimeSync, subscribeStore,
 } from "./store";
