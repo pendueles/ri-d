@@ -18,12 +18,9 @@ export default function ProjectListScreen({ profile, onBack, onCreate, onSelect 
     : allArtists.filter(a => a.name?.toLowerCase() === profile.name?.toLowerCase());
 
   const myArtistIds = new Set(myArtists.map(a => a.id));
-  const allProjects = _projects
+  const allProjects = myArtists
+    .flatMap(a => (a.projects || []).map(p => ({ ...p, artistName: a.name, artistPhoto: a.photo || null })))
     .filter(p => myArtistIds.has(p.artistId))
-    .map(p => {
-      const artist = myArtists.find(a => a.id === p.artistId);
-      return { ...p, artistName: artist?.name || p.artistName, artistPhoto: artist?.photo || null };
-    })
     .sort((a, b) => {
       const da = a.date ? new Date(a.date) : a.createdAt ? new Date(a.createdAt) : new Date(0);
       const db2 = b.date ? new Date(b.date) : b.createdAt ? new Date(b.createdAt) : new Date(0);
