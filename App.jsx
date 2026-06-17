@@ -46,8 +46,6 @@ export default function App() {
   useEffect(() => {
     const unsub = startRealtimeSync(() => {
       setSyncing(false);
-      if (saved && saved.phase && saved.phase !== "welcome") {
-      }
     });
     return unsub;
   }, []);
