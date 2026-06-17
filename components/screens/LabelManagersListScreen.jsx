@@ -1,7 +1,7 @@
 // components/screens/LabelManagersListScreen.jsx
 import { useState } from "react";
 import { theme, isDark } from "../../theme/theme";
-import { getArtists } from "../../firebase/store";
+import { getArtists, getLabelUsers, saveLabelUsers } from "../../firebase/store";
 
 export default function LabelManagersListScreen({ onBack, onNew }) {
   const t = theme(isDark());
