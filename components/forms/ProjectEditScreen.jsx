@@ -1,7 +1,7 @@
 // components/forms/ProjectEditScreen.jsx
 import { useState, useEffect, useRef } from "react";
 import { theme, isDark, useDarkMode } from "../../theme/theme";
-import { scoreColor, scoreLabel, bgColor } from "../../utils/helpers";
+import { scoreColor, scoreLabel, bgColor, compressImage } from "../../utils/helpers";
 import { calcBlockScore, calcTotalScore } from "../../utils/scoring";
 import { RIMAS_LOGO, ICON_ARTISTA, ICON_PROYECTO } from "../../data/assets";
 import HexRadarTotal from "../ui/HexRadarTotal";
@@ -16,12 +16,15 @@ export default function ProjectEditScreen({ songData, onBack, onSave }) {
   const [photo, setPhoto] = useState(songData?.photo || null);
   const fileRef = useRef();
 
-  const handleFile = (e) => {
+  const handleFile = async (e) => {
     const f = e.target.files[0];
     if (!f) return;
-    const reader = new FileReader();
-    reader.onload = ev => setPhoto(ev.target.result);
-    reader.readAsDataURL(f);
+    try {
+      const compressed = await compressImage(f);
+      setPhoto(compressed);
+    } catch (err) {
+      console.error("No se pudo procesar la imagen:", err);
+    }
   };
 
   const handleSave = () => {
