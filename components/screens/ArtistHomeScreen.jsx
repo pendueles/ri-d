@@ -2,9 +2,11 @@
 import { theme, isDark } from "../../theme/theme";
 import { calcBlockScore, calcTotalScore } from "../../utils/scoring";
 import { ARTIST_BLOCKS, SONG_BLOCKS } from "../../data/questions";
+import { getArtists, useFirebaseStore } from "../../firebase/store";
 
 export default function ArtistHomeScreen({ artistData, artistAnswers, onBlock, onResult, onBack, profile, onCatalogue, onNewProject, onEdit, onPending, onProfile }) {
   const t = theme(isDark());
+  useFirebaseStore(); // re-render on Firebase changes
 
   // Top=Resultado, top-right=DSPs, bot-right=Social,
   // bottom=Video, bot-left=Authority, top-left=Rights
@@ -140,7 +142,8 @@ export default function ArtistHomeScreen({ artistData, artistAnswers, onBlock, o
 
         // Scores
         const artistScore = Object.keys(artistAnswers).length > 0 ? Math.round(calcTotalScore(ARTIST_BLOCKS, artistAnswers)*10)/10 : null;
-        const artistProjects = _projects.filter(p => p.artistId === artistData?.id);
+        const liveArtist = getArtists().find(a => a.id === artistData?.id);
+        const artistProjects = (liveArtist?.projects || []).filter(p => p.artistId === artistData?.id);
         const projScores = artistProjects.map(p => {
           const ans = p.answers||{}; return Object.keys(ans).length>0 ? calcTotalScore(SONG_BLOCKS, ans) : null;
         }).filter(s=>s!==null);
