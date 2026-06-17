@@ -1,31 +1,13 @@
 import { useState, useEffect } from "react";
-import { useDarkMode, theme } from "./theme/theme";
-import { calcBlockScore, calcTotalScore } from "./utils/scoring";
-import { scoreColor, scoreLabel, bgColor } from "./utils/helpers";
-import { ARTIST_BLOCKS, ARTIST_QUESTIONS, SONG_BLOCKS, SONG_QUESTIONS } from "./data/questions";
-import { RIMAS_LOGO, ICON_ARTISTA, ICON_PROYECTO } from "./data/assets";
-import HexRadarTotal from "./components/ui/HexRadarTotal";
-import SplashScreen from "./components/ui/SplashScreen";
-import SwipeCard from "./components/quiz/SwipeCard";
-import SubcatSummaryScreen from "./components/quiz/SubcatSummaryScreen";
-import BlockSummaryScreen from "./components/quiz/BlockSummaryScreen";
-import TotalSummaryScreen from "./components/quiz/TotalSummaryScreen";
-import PendingTasksScreen from "./components/quiz/PendingTasksScreen";
-import ProfileSelect from "./components/screens/ProfileSelect";
-import BlockHomeScreen from "./components/screens/BlockHomeScreen";
-import ArtistHomeScreen from "./components/screens/ArtistHomeScreen";
-import ArtistProfileScreen from "./components/screens/ArtistProfileScreen";
-import ProjectHomeScreen from "./components/screens/ProjectHomeScreen";
-import ArtistListScreen from "./components/screens/ArtistListScreen";
-import ProjectListScreen from "./components/screens/ProjectListScreen";
-import ArtistCatalogueScreen from "./components/screens/ArtistCatalogueScreen";
-import ClientsListScreen from "./components/screens/ClientsListScreen";
-import LabelManagersListScreen from "./components/screens/LabelManagersListScreen";
-import NewArtistForm from "./components/forms/NewArtistForm";
-import ProjectForm from "./components/forms/ProjectForm";
-import NewLabelManagerScreen from "./components/forms/NewLabelManagerScreen";
-import ArtistEditScreen from "./components/forms/ArtistEditScreen";
-import ProjectEditScreen from "./components/forms/ProjectEditScreen";
+import { useDarkMode, theme } from "./theme";
+import { calcBlockScore, calcTotalScore, scoreColor, scoreLabel, bgColor } from "./utils";
+import { ARTIST_BLOCKS, ARTIST_QUESTIONS, SONG_BLOCKS, SONG_QUESTIONS,
+  RIMAS_LOGO, ICON_ARTISTA, ICON_PROYECTO } from "./data";
+import { HexRadarTotal, SplashScreen } from "./components/ui";
+import { SwipeCard, SubcatSummaryScreen, BlockSummaryScreen, TotalSummaryScreen, PendingTasksScreen } from "./components/quiz";
+import { ProfileSelect, BlockHomeScreen, ArtistHomeScreen, ArtistProfileScreen, ProjectHomeScreen,
+  ArtistListScreen, ProjectListScreen, ArtistCatalogueScreen, ClientsListScreen, LabelManagersListScreen } from "./components/screens";
+import { NewArtistForm, ProjectForm, NewLabelManagerScreen, ArtistEditScreen, ProjectEditScreen } from "./components/forms";
 import {
   useFirebaseStore, saveState, loadState, clearState,
   getArtists, getFirebaseError, clearFirebaseError,
@@ -34,7 +16,7 @@ import {
   getLabelUsers, saveLabelUsers,
   getMgmtUsers, saveMgmtUsers,
   startRealtimeSync,
-} from "./firebase/store";
+} from "./firebase";
 
 export default function App() {
   const dark = useDarkMode();
