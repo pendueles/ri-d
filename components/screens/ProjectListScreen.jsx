@@ -2,7 +2,7 @@
 import { theme, isDark } from "../../theme/theme";
 import { scoreColor } from "../../utils/helpers";
 import { calcTotalScore } from "../../utils/scoring";
-import { getArtists } from "../../firebase/store";
+import { getArtists, useFirebaseStore } from "../../firebase/store";
 import { SONG_BLOCKS } from "../../data/questions";
 
 export default function ProjectListScreen({ profile, onBack, onCreate, onSelect }) {
