@@ -135,10 +135,7 @@ export default function ArtistCatalogueScreen({ artistData, profile, onBack, onN
               );
             })}
           </div>
-          <div style={{fontFamily:'Arial,sans-serif', fontSize:'12px', color:t.text3, marginBottom:'4px'}}>{linkedProjects.filter(p=>p.answers&&Object.keys(p.answers).length>0).length} proyectos evaluados</div>
-          <div style={{fontFamily:'Arial,sans-serif', fontSize:'10px', color:t.text3, marginBottom:'12px', maxWidth:'300px', textAlign:'center'}}>
-            DEBUG: {linkedProjects.filter(p=>p.answers&&Object.keys(p.answers).length>0).map(p => `${p.title||'?'}=${Math.round(calcTotalScore(SONG_BLOCKS,p.answers)*10)/10}`).join(', ')}
-          </div>
+          <div style={{fontFamily:'Arial,sans-serif', fontSize:'12px', color:t.text3, marginBottom:'12px'}}>{linkedProjects.filter(p=>p.answers&&Object.keys(p.answers).length>0).length} proyectos evaluados</div>
         </div>
       )}
 
@@ -157,7 +154,7 @@ export default function ArtistCatalogueScreen({ artistData, profile, onBack, onN
         ) : (
           <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(220px, 1fr))", gap:"20px" }}>
             {linkedProjects.map((p, i) => {
-              const liveScore = p.score !== undefined ? p.score : (p.answers && Object.keys(p.answers).length > 0 ? Math.round(calcTotalScore(SONG_BLOCKS, p.answers) * 10) / 10 : null);
+              const liveScore = p.answers && Object.keys(p.answers).length > 0 ? Math.round(calcTotalScore(SONG_BLOCKS, p.answers) * 10) / 10 : null;
               const isSelected = selected.includes(p.id);
               return (
                 <ProjectKpiCard
