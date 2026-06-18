@@ -380,7 +380,7 @@ export default function App() {
         <ProjectHomeScreen
           songData={currentSong?.data}
           songAnswers={currentSong?.answers || {}}
-          onBack={() => setPhase("welcome")}
+          onBack={() => setPhase("artist-catalogue")}
           onEdit={() => setPhase("project-edit")}
           onResult={() => setPhase("song-result")}
           onPending={() => setPhase("song-pending")}
