@@ -2,6 +2,7 @@
 import { theme, isDark } from "../../theme/theme";
 import { scoreColor, scoreLabel, bgColor } from "../../utils/helpers";
 import { calcBlockScore, calcTotalScore } from "../../utils/scoring";
+import HexRadarTotal from "../ui/HexRadarTotal";
 
 export default function TotalSummaryScreen({ blocks, answers, title, subtitle, photo, onContinue, continueLabel, onSecondary, secondaryLabel }) {
   const t = theme(isDark());
