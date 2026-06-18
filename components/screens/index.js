@@ -3,6 +3,7 @@ export { default as ProfileSelect } from "./ProfileSelect";
 export { default as HomeDashboard } from "./HomeDashboard";
 export { default as BlockHomeScreen } from "./BlockHomeScreen";
 export { default as ArtistHomeScreen } from "./ArtistHomeScreen";
+export { default as ArtistPendingScreen } from "./ArtistPendingScreen";
 export { default as ArtistProfileScreen } from "./ArtistProfileScreen";
 export { default as ProjectHomeScreen } from "./ProjectHomeScreen";
 export { default as ArtistListScreen } from "./ArtistListScreen";
