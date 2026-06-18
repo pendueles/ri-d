@@ -1,7 +1,6 @@
 // components/screens/ArtistCatalogueScreen.jsx
 import { useState } from "react";
 import { theme, isDark } from "../../theme/theme";
-import { scoreColor } from "../../utils/helpers";
 import { calcBlockScore, calcTotalScore } from "../../utils/scoring";
 import { getArtists, useFirebaseStore, deleteProjectById } from "../../firebase/store";
 import { SONG_BLOCKS } from "../../data/questions";
@@ -140,12 +139,12 @@ export default function ArtistCatalogueScreen({ artistData, profile, onBack, onN
         </div>
       )}
 
-      <div style={{flex:1, overflowY:'auto', WebkitOverflowScrolling:'touch', padding:'24px 20px'}}>
+      <div style={{flex:1, overflowY:'auto', WebkitOverflowScrolling:'touch', padding:'24px 20px', background:'#ffffff'}}>
         {linkedProjects.length === 0 ? (
           <div style={{display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:'50vh', textAlign:'center'}}>
             <div style={{fontFamily:'Arial,sans-serif', fontSize:'48px', fontWeight:'700', color:t.border, marginBottom:'12px'}}>—</div>
-            <div style={{fontFamily:'Arial,sans-serif', fontSize:'20px', fontWeight:'700', color:t.text, marginBottom:'8px'}}>Vacío</div>
-            <div style={{fontFamily:'Arial,sans-serif', fontSize:'14px', color:t.text3, marginBottom:'32px'}}>No hay proyectos asignados a {artistData.name}</div>
+            <div style={{fontFamily:'Arial,sans-serif', fontSize:'20px', fontWeight:'700', color:'#0a0a0a', marginBottom:'8px'}}>Vacío</div>
+            <div style={{fontFamily:'Arial,sans-serif', fontSize:'14px', color:'#aaaaaa', marginBottom:'32px'}}>No hay proyectos asignados a {artistData.name}</div>
             {isLabelOrAdmin && (
               <button onClick={onNewProject} style={{padding:'16px 32px', background:t.accent, color:'#fff', border:'none', borderRadius:'14px', fontFamily:'Arial,sans-serif', fontSize:'16px', fontWeight:'700', cursor:'pointer'}}>
                 + Nuevo proyecto
@@ -153,42 +152,103 @@ export default function ArtistCatalogueScreen({ artistData, profile, onBack, onN
             )}
           </div>
         ) : (
-          <div style={{display:'flex', flexDirection:'column', gap:'10px'}}>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(220px, 1fr))", gap:"20px" }}>
             {linkedProjects.map((p, i) => {
+              const liveScore = p.score !== undefined ? p.score : (p.answers && Object.keys(p.answers).length > 0 ? Math.round(calcTotalScore(SONG_BLOCKS, p.answers) * 10) / 10 : null);
               const isSelected = selected.includes(p.id);
               return (
-                <button key={p.id || i}
-                  onClick={() => {
-                    if (editMode) { toggleSelect(p.id); return; }
-                    onOpenProject(p);
-                  }}
-                  style={{display:'flex', alignItems:'center', gap:'14px', padding:'16px', background:t.card, border:`1px solid ${editMode && isSelected ? '#E8151B' : t.border}`, borderRadius:'16px', cursor:'pointer', textAlign:'left', width:'100%', boxShadow:`0 2px 8px ${t.shadow}`, transition:'border-color 0.15s'}}>
-                  {editMode && (
-                    <div style={{width:'22px', height:'22px', borderRadius:'50%', border:`2px solid ${isSelected ? '#E8151B' : t.border}`, background: isSelected ? '#E8151B' : 'transparent', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, transition:'all 0.15s'}}>
-                      {isSelected && <span style={{color:'white', fontSize:'12px', fontWeight:'700'}}>✓</span>}
-                    </div>
-                  )}
-                  {p.photo ? (
-                    <img src={p.photo} alt="" style={{width:'48px', height:'48px', borderRadius:'10px', objectFit:'cover', flexShrink:0}}/>
-                  ) : (
-                    <div style={{width:'48px', height:'48px', borderRadius:'10px', background:t.bg2, border:`1px solid ${t.border}`, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, fontSize:'22px'}}>🎵</div>
-                  )}
-                  <div style={{flex:1, minWidth:0}}>
-                    <div style={{fontFamily:'Arial,sans-serif', fontSize:'16px', fontWeight:'700', color:t.text, marginBottom:'2px'}}>{p.title || 'Sin título'}</div>
-                    <div style={{fontFamily:'Arial,sans-serif', fontSize:'12px', color:t.text2}}>{p.date || 'Sin fecha'}</div>
-                  </div>
-                  {!editMode && (() => {
-                    const liveScore = p.score !== undefined ? p.score : (p.answers && Object.keys(p.answers).length > 0 ? Math.round(calcTotalScore(SONG_BLOCKS, p.answers) * 10) / 10 : null);
-                    return liveScore !== null ? (
-                      <div style={{fontFamily:'Arial,sans-serif', fontSize:'20px', fontWeight:'700', color:scoreColor(liveScore), flexShrink:0}}>{liveScore}</div>
-                    ) : null;
-                  })()}
-                  {!editMode && <div style={{color:t.text3, fontSize:'18px'}}>›</div>}
-                </button>
+                <ProjectKpiCard
+                  key={p.id || i}
+                  project={p}
+                  score={liveScore}
+                  color={kpiColor(liveScore)}
+                  editMode={editMode}
+                  isSelected={isSelected}
+                  onClick={() => editMode ? toggleSelect(p.id) : onOpenProject(p)}
+                />
               );
             })}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────
+// KPI card: foto a sangre completa, score como badge,
+// degradado inferior con título + barra + fecha
+// ─────────────────────────────────────────
+function kpiColor(score) {
+  if (score === null) return { solid: '#9CA3AF', text: '#374151' };
+  if (score > 80) return { solid: '#639922', text: '#173404' };
+  if (score >= 60) return { solid: '#378ADD', text: '#042C53' };
+  if (score >= 40) return { solid: '#BA7517', text: '#412402' };
+  return { solid: '#E24B4A', text: '#501313' };
+}
+
+function ProjectKpiCard({ project, score, color, editMode, isSelected, onClick }) {
+  const [hover, setHover] = useState(false);
+  const hasPhoto = !!project.photo;
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } }}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        position:"relative",
+        aspectRatio:"3/4",
+        border: isSelected ? "2px solid #E8151B" : "none",
+        borderRadius:"22px",
+        overflow:"hidden",
+        cursor:"pointer",
+        textAlign:"left",
+        background: hasPhoto ? "#1a1a1a" : color.solid,
+        boxShadow: hover ? "0 14px 30px rgba(0,0,0,0.18)" : "0 2px 10px rgba(0,0,0,0.08)",
+        transform: hover ? "translateY(-2px) scale(1.02)" : "none",
+        transition: "transform 0.2s ease, box-shadow 0.2s ease",
+      }}>
+
+      {hasPhoto && (
+        <img src={project.photo} alt="" style={{ position:"absolute", inset:0, width:"100%", height:"100%", objectFit:"cover" }}/>
+      )}
+
+      <div style={{ position:"absolute", inset:0, background:"linear-gradient(to bottom, rgba(0,0,0,0) 45%, rgba(0,0,0,0.75) 100%)" }}/>
+
+      {editMode && (
+        <div style={{ position:"absolute", top:"14px", left:"14px", width:"24px", height:"24px", borderRadius:"50%", border:`2px solid ${isSelected ? '#E8151B' : '#ffffff'}`, background: isSelected ? '#E8151B' : 'rgba(0,0,0,0.25)', display:"flex", alignItems:"center", justifyContent:"center" }}>
+          {isSelected && <span style={{color:'white', fontSize:'13px', fontWeight:'700'}}>✓</span>}
+        </div>
+      )}
+
+      {score !== null && (
+        <div style={{ position:"absolute", top:"14px", left: editMode ? "48px" : "14px", background:"#ffffff", color:color.text, fontFamily:"Arial,sans-serif", fontSize:"18px", fontWeight:"700", padding:"6px 12px", borderRadius:"12px", boxShadow:"0 2px 6px rgba(0,0,0,0.15)" }}>
+          {score.toFixed(1)}
+        </div>
+      )}
+
+      {!editMode && (
+        <div style={{ position:"absolute", bottom:"18px", right:"18px", color:"#ffffff", fontSize:"20px" }}>›</div>
+      )}
+
+      <div style={{ position:"absolute", bottom:0, left:0, right:0, padding:"18px" }}>
+        <div style={{ fontFamily:"Arial,sans-serif", fontSize:"19px", fontWeight:"700", color:"#ffffff", marginBottom:"8px" }}>
+          {project.title || "Sin título"}
+        </div>
+
+        {score !== null && (
+          <div style={{ width:"100%", height:"6px", borderRadius:"6px", background:"rgba(255,255,255,0.25)", overflow:"hidden", marginBottom:"10px" }}>
+            <div style={{ width:`${score}%`, height:"100%", background:"#ffffff", borderRadius:"6px" }}/>
+          </div>
+        )}
+
+        <div style={{ fontFamily:"Arial,sans-serif", fontSize:"12px", color:"rgba(255,255,255,0.85)" }}>
+          {project.date || "Sin fecha"}
+        </div>
       </div>
     </div>
   );
