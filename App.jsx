@@ -5,7 +5,7 @@ import { ARTIST_BLOCKS, ARTIST_QUESTIONS, SONG_BLOCKS, SONG_QUESTIONS,
   RIMAS_LOGO, ICON_ARTISTA, ICON_PROYECTO } from "./data";
 import { HexRadarTotal, SplashScreen } from "./components/ui";
 import { SwipeCard, SubcatSummaryScreen, BlockSummaryScreen, TotalSummaryScreen, PendingTasksScreen } from "./components/quiz";
-import { ProfileSelect, HomeDashboard, BlockHomeScreen, ArtistHomeScreen, ArtistPendingScreen, ArtistProfileScreen, ProjectHomeScreen,
+import { ProfileSelect, HomeDashboard, BlockHomeScreen, SubcatHomeScreen, ArtistHomeScreen, ArtistPendingScreen, ArtistProfileScreen, ProjectHomeScreen,
   ArtistListScreen, ProjectListScreen, ArtistCatalogueScreen, ClientsListScreen, LabelManagersListScreen } from "./components/screens";
 import { NewArtistForm, ProjectForm, NewLabelManagerScreen, ArtistEditScreen, ProjectEditScreen } from "./components/forms";
 import {
@@ -27,6 +27,7 @@ export default function App() {
   const [phase, setPhase] = useState("welcome");
   const [pendingInitialView, setPendingInitialView] = useState("overview");
   const [pendingBlockFilter, setPendingBlockFilter] = useState(null);
+  const [currentSubcatId, setCurrentSubcatId] = useState(null);
   const [artistData, setArtistData] = useState({});
   const [artistAnswers, setArtistAnswers] = useState({});
   const [artistQIdx, setArtistQIdx] = useState(0);
@@ -467,10 +468,31 @@ export default function App() {
         onGoHome={() => setPhase("artist-home")}
         onPending={() => { setPendingBlockFilter(block); setPhase("artist-pending"); }}
         onSubcat={(subcatId) => {
+          setCurrentSubcatId(subcatId);
+          setPhase("subcat-home");
+        }}
+      />
+    );
+  }
+
+  // SUBCATEGORY HOME — score / pending / questions, before starting the quiz
+  if (phase === "subcat-home") {
+    const block = ARTIST_BLOCKS[currentBlockIdx];
+    const subcat = block?.subcats.find(s => s.id === currentSubcatId);
+    if (!block || !subcat) { setPhase("block-home"); return null; }
+    return (
+      <SubcatHomeScreen
+        block={block}
+        subcat={subcat}
+        answers={artistAnswers}
+        artistName={artistData.name}
+        onBack={() => setPhase("block-home")}
+        onPending={() => { setPendingBlockFilter({ ...block, subcats: [subcat], __isSubcatFilter__: true }); setPhase("artist-pending"); }}
+        onStartQuestions={() => {
           let startIdx = 0;
           for (const b of ARTIST_BLOCKS) {
             for (const sub of b.subcats) {
-              if (b.id === block.id && sub.id === subcatId) {
+              if (b.id === block.id && sub.id === subcat.id) {
                 setArtistQIdx(startIdx);
                 setPhase("artist-questions");
                 return;
@@ -478,14 +500,6 @@ export default function App() {
               startIdx += sub.items.length;
             }
           }
-          // fallback — start at block beginning
-          let blockStart = 0;
-          for (const b of ARTIST_BLOCKS) {
-            if (b.id === block.id) break;
-            b.subcats.forEach(s => { blockStart += s.items.length; });
-          }
-          setArtistQIdx(blockStart);
-          setPhase("artist-questions");
         }}
       />
     );
@@ -565,7 +579,11 @@ export default function App() {
         songBlocks={SONG_BLOCKS}
         initialView={pendingInitialView}
         blockFilter={pendingBlockFilter}
-        onBack={() => { setPendingBlockFilter(null); setPhase(pendingBlockFilter ? "block-home" : pendingInitialView === "perfil" ? "artist-profile" : "artist-home"); }}
+        onBack={() => {
+          const wasSubcat = pendingBlockFilter?.__isSubcatFilter__;
+          setPendingBlockFilter(null);
+          setPhase(wasSubcat ? "subcat-home" : pendingBlockFilter ? "block-home" : pendingInitialView === "perfil" ? "artist-profile" : "artist-home");
+        }}
         onGoToProfileQuestion={(itemId) => {
           const qIdx = ARTIST_QUESTIONS.findIndex(q => q.id === itemId);
           if (qIdx === -1) return;
@@ -623,12 +641,16 @@ export default function App() {
   if (phase === "artist-questions") {
     const q = ARTIST_QUESTIONS[artistQIdx];
     if (!q) { setPhase("block-home"); return null; }
+    // Progress shown to the person is scoped to the current subcategory
+    // (e.g. "3/11" within Spotify), not the whole artist profile.
+    const subcatQuestions = ARTIST_QUESTIONS.filter(item => item.subcatId === q.subcatId);
+    const subcatPosition = subcatQuestions.findIndex(item => item.id === q.id);
     return (
       <SwipeCard
         question={q}
         onAnswer={handleArtistAnswer}
-        currentIndex={artistQIdx + 1}
-        total={ARTIST_QUESTIONS.length}
+        currentIndex={subcatPosition + 1}
+        total={subcatQuestions.length}
         answers={artistAnswers}
         blockLabel={q.blockLabel}
         subcatLabel={q.subcatLabel}
