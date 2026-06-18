@@ -26,6 +26,7 @@ export default function App() {
   const saveProfile = (p) => { setProfile(p); };
   const [phase, setPhase] = useState("welcome");
   const [pendingInitialView, setPendingInitialView] = useState("overview");
+  const [pendingBlockFilter, setPendingBlockFilter] = useState(null);
   const [artistData, setArtistData] = useState({});
   const [artistAnswers, setArtistAnswers] = useState({});
   const [artistQIdx, setArtistQIdx] = useState(0);
@@ -464,7 +465,7 @@ export default function App() {
         artistName={artistData.name}
         onBack={() => setPhase("artist-profile")}
         onGoHome={() => setPhase("artist-home")}
-        onPending={() => { setPendingInitialView("perfil"); setPhase("artist-pending"); }}
+        onPending={() => { setPendingBlockFilter(block); setPhase("artist-pending"); }}
         onSubcat={(subcatId) => {
           let startIdx = 0;
           for (const b of ARTIST_BLOCKS) {
@@ -515,7 +516,7 @@ export default function App() {
         onResult={() => setPhase("artist-result")}
         onEdit={() => setPhase("artist-edit")}
         onCatalogue={() => setPhase("artist-catalogue")}
-        onPending={() => { setPendingInitialView("overview"); setPhase("artist-pending"); }}
+        onPending={() => { setPendingInitialView("overview"); setPendingBlockFilter(null); setPhase("artist-pending"); }}
         onProfile={() => setPhase("artist-profile")}
         onNewProject={() => {
           setCurrentSong({ data: { artistName: artistData.name, linkedArtist: artistData }, answers: {} });
@@ -540,7 +541,7 @@ export default function App() {
         artistAnswers={artistAnswers}
         onBack={() => setPhase("artist-home")}
         onResult={() => setPhase("artist-result")}
-        onPending={() => { setPendingInitialView("perfil"); setPhase("artist-pending"); }}
+        onPending={() => { setPendingInitialView("perfil"); setPendingBlockFilter(null); setPhase("artist-pending"); }}
         onBlock={(blockId) => {
           const idx = ARTIST_BLOCKS.findIndex(b => b.id === blockId);
           if (idx === -1) return;
@@ -563,7 +564,8 @@ export default function App() {
         artistBlocks={ARTIST_BLOCKS}
         songBlocks={SONG_BLOCKS}
         initialView={pendingInitialView}
-        onBack={() => setPhase(pendingInitialView === "perfil" ? "artist-profile" : "artist-home")}
+        blockFilter={pendingBlockFilter}
+        onBack={() => { setPendingBlockFilter(null); setPhase(pendingBlockFilter ? "block-home" : pendingInitialView === "perfil" ? "artist-profile" : "artist-home"); }}
         onGoToProfileQuestion={(itemId) => {
           const qIdx = ARTIST_QUESTIONS.findIndex(q => q.id === itemId);
           if (qIdx === -1) return;
