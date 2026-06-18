@@ -65,15 +65,18 @@ export function compressImage(file, maxDimension = 400, quality = 0.7) {
   });
 }
 
-// Build a flat, sorted list of pending tasks (unanswered or answered "no")
-// from a set of question blocks + answers. Priority is derived from each
-// question's weight, since higher-weight items move the score the most.
+// Build a flat, sorted list of pending tasks from a set of question
+// blocks + answers. A task is "pending" only when the question was
+// explicitly answered "no" (answers[item.id] === false) — unanswered
+// questions don't count, since they may simply not apply yet.
+// Priority is derived from each question's weight, since higher-weight
+// items move the score the most.
 export function getPendingTasks(blocks, answers) {
   const tasks = [];
   blocks.forEach(block => {
     block.subcats.forEach(sub => {
       sub.items.forEach(item => {
-        if (answers[item.id] === true) return; // already resolved
+        if (answers[item.id] !== false) return; // only explicit "no" answers are pending tasks
         const priority = item.w >= 8 ? "Alta" : item.w >= 4 ? "Media" : "Baja";
         tasks.push({
           id: item.id,
@@ -82,7 +85,7 @@ export function getPendingTasks(blocks, answers) {
           blockId: block.id,
           priority,
           impact: item.w,
-          status: answers[item.id] === false ? "No cumple" : "Sin revisar",
+          status: "No cumple",
         });
       });
     });
