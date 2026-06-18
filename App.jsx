@@ -28,6 +28,7 @@ export default function App() {
   const [pendingInitialView, setPendingInitialView] = useState("overview");
   const [pendingBlockFilter, setPendingBlockFilter] = useState(null);
   const [currentSubcatId, setCurrentSubcatId] = useState(null);
+  const [songPendingBlockFilter, setSongPendingBlockFilter] = useState(null);
   const [artistData, setArtistData] = useState({});
   const [artistAnswers, setArtistAnswers] = useState({});
   const [artistQIdx, setArtistQIdx] = useState(0);
@@ -383,7 +384,7 @@ export default function App() {
           onBack={() => setPhase("artist-catalogue")}
           onEdit={() => setPhase("project-edit")}
           onResult={() => setPhase("song-result")}
-          onPending={() => setPhase("song-pending")}
+          onPending={() => { setSongPendingBlockFilter(null); setPhase("song-pending"); }}
           onBlock={(blockId) => {
             const idx = SONG_BLOCKS.findIndex(b => b.id === blockId);
             if (idx === -1) { console.warn("Block not found:", blockId); return; }
@@ -397,18 +398,28 @@ export default function App() {
 
   // SONG PENDING TASKS
   if (phase === "song-pending") {
+    const effectiveBlocks = songPendingBlockFilter ? [songPendingBlockFilter] : SONG_BLOCKS;
     return (
       <PendingTasksScreen
-        blocks={SONG_BLOCKS}
+        blocks={effectiveBlocks}
         answers={currentSong?.answers || {}}
         title={currentSong?.data?.title || "Proyecto"}
-        onBack={() => setPhase("song-home")}
-        onGoToQuestion={(qIdx) => {
-          setSongQIdx(qIdx);
+        onBack={() => {
+          const wasBlockFilter = !!songPendingBlockFilter;
+          setSongPendingBlockFilter(null);
+          setPhase(wasBlockFilter ? "song-block-home" : "song-home");
+        }}
+        onGoToQuestion={(qIdx, itemId) => {
+          let resolvedIdx = qIdx;
+          if (songPendingBlockFilter && itemId) {
+            const globalIdx = SONG_QUESTIONS.findIndex(q => q.id === itemId);
+            if (globalIdx !== -1) resolvedIdx = globalIdx;
+          }
+          setSongQIdx(resolvedIdx);
           let count = 0;
           for (let i = 0; i < SONG_BLOCKS.length; i++) {
             SONG_BLOCKS[i].subcats.forEach(s => { count += s.items.length; });
-            if (qIdx < count) { setCurrentBlockIdx(i); break; }
+            if (resolvedIdx < count) { setCurrentBlockIdx(i); break; }
           }
           setPhase("song-questions");
         }}
@@ -427,6 +438,7 @@ export default function App() {
         artistName={currentSong?.data?.title || "Proyecto"}
         onBack={() => setPhase("song-home")}
         onGoHome={() => setPhase("song-home")}
+        onPending={() => { setSongPendingBlockFilter(block); setPhase("song-pending"); }}
         onSubcat={(subcatId) => {
           let startIdx = 0;
           let foundBlock = null;
