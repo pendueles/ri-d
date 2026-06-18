@@ -35,51 +35,105 @@ function KpiCard({ label, value, onClick }) {
   );
 }
 
-export default function BlockHomeScreen({ block, artistAnswers, onSubcat, onBack, artistName, onGoHome, onPending }) {
+export default function BlockHomeScreen({ block, artistAnswers, onSubcat, onBack, artistName, onGoHome, onPending, mode = 'artist' }) {
   const t = theme(isDark());
   const rad = (deg) => deg * Math.PI / 180;
+  const isSong = mode === 'song';
 
-  // Map subcats to hexagon vertices based on block id
+  // Map subcats to hexagon vertices based on block id AND mode
   const getVertices = () => {
-    if (block.id === 'dsps') return [
-      { id:'result',       label:'Total',               angle: -90  },
-      { id:'spotify',      label:'Spotify',             angle: -150 },
-      { id:'apple',        label:'Apple Music',         angle: -30  },
-      { id:'otherdsps',    label:'Other DSPs',          angle:  30  },
-      { id:'soundcloud',   label:'SoundCloud & Beatport', angle:  90 },
-      { id:'ytmusic',      label:'YT Music',            angle:  150 },
-    ];
-    if (block.id === 'social') return [
-      { id:'result',    label:'Puntuación',  angle: -90  },
-      { id:'tiktok',    label:'TikTok',      angle: -30  },
-      { id:'rrss_alt',  label:'RRSS Alt',    angle:  30  },
-      { id:'web',       label:'Web',         angle:  90  },
-      { id:'x',         label:'X',           angle:  150 },
-      { id:'instagram', label:'Instagram',   angle: -150 },
-    ];
-    if (block.id === 'authority') return [
-      { id:'result',      label:'Puntuación',      angle: -90  },
-      { id:'wikipedia',   label:'Wikipedia',       angle: -30  },
-      { id:'musicbrainz', label:'MusicBrainz&Co',  angle:  30  },
-      { id:'composer',    label:'Composer',        angle:  90  },
-      { id:'googlepanel', label:'Google Panel',    angle:  150 },
-      { id:'lyrics',      label:'Lyrics',          angle: -150 },
-    ];
-    if (block.id === 'ytvideo') return [
-      { id:'result',        label:'Puntuación',    angle: -90  },
-      { id:'configuracion', label:'Configuración', angle: -30  },
-      { id:'diseno',        label:'Diseño',        angle:  30  },
-      { id:'contenido',     label:'Contenido',     angle:  90  },
-      { id:'organizacion',  label:'Organización',  angle:  150 },
-      { id:'accesos',       label:'Accesos',       angle: -150 },
-    ];
-    // Default: use subcats as vertices
+    if (!isSong) {
+      // ARTIST mode
+      if (block.id === 'dsps') return [
+        { id:'result',       label:'Total',                 angle: -90  },
+        { id:'spotify',      label:'Spotify',               angle: -150 },
+        { id:'apple',        label:'Apple Music',           angle: -30  },
+        { id:'otherdsps',    label:'Other DSPs',            angle:  30  },
+        { id:'soundcloud',   label:'SoundCloud & Beatport', angle:  90  },
+        { id:'ytmusic',      label:'YT Music',              angle:  150 },
+      ];
+      if (block.id === 'social') return [
+        { id:'result',    label:'Puntuación',  angle: -90  },
+        { id:'tiktok',    label:'TikTok',      angle: -30  },
+        { id:'rrss_alt',  label:'RRSS Alt',    angle:  30  },
+        { id:'web',       label:'Web',         angle:  90  },
+        { id:'x',         label:'X',           angle:  150 },
+        { id:'instagram', label:'Instagram',   angle: -150 },
+      ];
+      if (block.id === 'authority') return [
+        { id:'result',      label:'Puntuación',    angle: -90  },
+        { id:'wikipedia',   label:'Wikipedia',     angle: -30  },
+        { id:'musicbrainz', label:'MusicBrainz',   angle:  30  },
+        { id:'composer',    label:'Composer',      angle:  90  },
+        { id:'googlepanel', label:'Google Panel',  angle:  150 },
+        { id:'lyrics',      label:'Lyrics',        angle: -150 },
+      ];
+      if (block.id === 'ytvideo') return [
+        { id:'result',        label:'Puntuación',    angle: -90  },
+        { id:'configuracion', label:'Configuración', angle: -30  },
+        { id:'diseno',        label:'Diseño',        angle:  30  },
+        { id:'contenido',     label:'Contenido',     angle:  90  },
+        { id:'organizacion',  label:'Organización',  angle:  150 },
+        { id:'accesos',       label:'Accesos',       angle: -150 },
+      ];
+    } else {
+      // SONG mode — completely different subcat IDs
+      if (block.id === 'dsps') return [
+        { id:'result',         label:'Total',                 angle: -90  },
+        { id:'spotify',        label:'Spotify',               angle: -150 },
+        { id:'apple_music',    label:'Apple Music',           angle: -30  },
+        { id:'other_dsps',     label:'Other DSPs',            angle:  30  },
+        { id:'soundcloud',     label:'SoundCloud & Beatport', angle:  90  },
+        { id:'youtube_music',  label:'YT Music',              angle:  150 },
+      ];
+      if (block.id === 'social') return [
+        { id:'result',     label:'Puntuación', angle: -90  },
+        { id:'tiktok',     label:'TikTok',     angle: -30  },
+        { id:'x',          label:'X',          angle:  30  },
+        { id:'instagram',  label:'Instagram',  angle: -150 },
+      ];
+      if (block.id === 'authority') return [
+        { id:'result',         label:'Puntuación',    angle: -90  },
+        { id:'wikipedia',      label:'Wikipedia',     angle: -30  },
+        { id:'musicbrainzco',  label:'MusicBrainz',   angle:  30  },
+        { id:'composser',      label:'Composser',     angle:  90  },
+        { id:'google_panel',   label:'Google Panel',  angle:  150 },
+        { id:'lyrics',         label:'Lyrics',        angle: -150 },
+      ];
+      if (block.id === 'ytvideo') return [
+        { id:'result',                    label:'Puntuación',           angle: -90  },
+        { id:'upload_assets',             label:'Upload Assets',        angle: -150 },
+        { id:'content_id__derivados',     label:'Content ID',           angle: -30  },
+        { id:'internal_connection',       label:'Internal',             angle:  30  },
+        { id:'external_connection',       label:'External',             angle:  90  },
+        { id:'otras_dvps',                label:'Otras DVPs',           angle:  150 },
+      ];
+    }
+    // Default: use subcats as vertices (used for Rights and any unrecognized block)
     return [
       { id:'result', label:'Total', angle:-90 },
-      ...block.subcats.map((s, i) => ({
+      ...block.subcats.slice(0, 5).map((s, i) => ({
         id: s.id, label: s.label, angle: -30 + i * 60
       }))
     ];
+  };
+
+  // KPI card order — independent from hexagon vertex angles, per mode
+  const getCardOrder = () => {
+    if (!isSong) {
+      if (block.id === 'dsps')      return ['spotify', 'apple', 'ytmusic', 'otherdsps', 'soundcloud'];
+      if (block.id === 'social')    return ['instagram', 'tiktok', 'x', 'rrss_alt', 'web'];
+      if (block.id === 'authority') return ['lyrics', 'wikipedia', 'googlepanel', 'musicbrainz', 'composer'];
+      if (block.id === 'ytvideo')   return ['accesos', 'configuracion', 'organizacion', 'diseno', 'contenido'];
+      if (block.id === 'rights')    return ['publishing', 'sgae', 'agedi', 'soundexchange', 'aie'];
+    } else {
+      if (block.id === 'dsps')      return ['spotify', 'apple_music', 'youtube_music', 'other_dsps', 'soundcloud', 'beatport'];
+      if (block.id === 'social')    return ['instagram', 'tiktok', 'x'];
+      if (block.id === 'authority') return ['lyrics', 'wikipedia', 'google_panel', 'musicbrainzco', 'composser', 'ooh'];
+      if (block.id === 'ytvideo')   return ['upload_assets', 'content_id__derivados', 'internal_connection', 'external_connection', 'otras_dvps', 'otras_integraciones'];
+      if (block.id === 'rights')    return ['sgae', 'soundexchange', 'aie', 'agedi', 'samples'];
+    }
+    return null;
   };
 
   const vertices = getVertices();
@@ -89,7 +143,8 @@ export default function BlockHomeScreen({ block, artistAnswers, onSubcat, onBack
     if (subcatId === 'result') {
       return Math.round(calcBlockScore(block, artistAnswers) * 10) / 10;
     }
-    // Handle combined soundcloud+beatport
+    // In song mode, DSPs has soundcloud AND beatport as separate subcats —
+    // the hexagon vertex 'soundcloud' combines both for display purposes.
     if (subcatId === 'soundcloud') {
       const scSub = block.subcats.find(s => s.id === 'soundcloud');
       const bpSub = block.subcats.find(s => s.id === 'beatport');
@@ -112,7 +167,6 @@ export default function BlockHomeScreen({ block, artistAnswers, onSubcat, onBack
     return Math.min(100, Math.round(raw * 10) / 10);
   };
 
-  // Sorted by angle for clean ring paths (no crossing lines)
   const sortedPoints = [...vertices].sort((a,b) => a.angle - b.angle).map(v => ({
     x: cx + R * Math.cos(rad(v.angle)),
     y: cy + R * Math.sin(rad(v.angle)),
@@ -136,18 +190,8 @@ export default function BlockHomeScreen({ block, artistAnswers, onSubcat, onBack
     return pts.map((p,i) => `${i===0?'M':'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ') + ' Z';
   })();
 
-  // Pending tasks scoped to this block only
   const pendingCount = getPendingTasks([block], artistAnswers).length;
 
-  // KPI card order — independent from the hexagon vertex angles, as requested
-  const getCardOrder = () => {
-    if (block.id === 'dsps') return ['spotify', 'apple', 'ytmusic', 'otherdsps', 'soundcloud'];
-    if (block.id === 'social') return ['instagram', 'tiktok', 'x', 'rrss_alt', 'web'];
-    if (block.id === 'authority') return ['lyrics', 'wikipedia', 'googlepanel', 'musicbrainz', 'composer'];
-    if (block.id === 'ytvideo') return ['accesos', 'configuracion', 'organizacion', 'diseno', 'contenido'];
-    if (block.id === 'rights') return ['publishing', 'sgae', 'agedi', 'soundexchange', 'aie'];
-    return null;
-  };
   const cardOrder = getCardOrder();
   const subcatCards = cardOrder
     ? cardOrder.map(id => vertices.find(v => v.id === id)).filter(Boolean)
