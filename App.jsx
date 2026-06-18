@@ -436,6 +436,7 @@ export default function App() {
         block={block}
         artistAnswers={currentSong?.answers || {}}
         artistName={currentSong?.data?.title || "Proyecto"}
+        mode="song"
         onBack={() => setPhase("song-home")}
         onGoHome={() => setPhase("song-home")}
         onPending={() => { setSongPendingBlockFilter(block); setPhase("song-pending"); }}
