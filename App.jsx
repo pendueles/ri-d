@@ -440,11 +440,31 @@ export default function App() {
         onGoHome={() => setPhase("song-home")}
         onPending={() => { setSongPendingBlockFilter(block); setPhase("song-pending"); }}
         onSubcat={(subcatId) => {
+          setCurrentSubcatId(subcatId);
+          setPhase("song-subcat-home");
+        }}
+      />
+    );
+  }
+
+  // SONG SUBCATEGORY HOME — score / pending / questions, before starting the quiz
+  if (phase === "song-subcat-home") {
+    const block = SONG_BLOCKS[currentBlockIdx];
+    const subcat = block?.subcats.find(s => s.id === currentSubcatId);
+    if (!block || !subcat) { setPhase("song-block-home"); return null; }
+    return (
+      <SubcatHomeScreen
+        block={block}
+        subcat={subcat}
+        answers={currentSong?.answers || {}}
+        artistName={currentSong?.data?.title || "Proyecto"}
+        onBack={() => setPhase("song-block-home")}
+        onPending={() => { setSongPendingBlockFilter({ ...block, subcats: [subcat] }); setPhase("song-pending"); }}
+        onStartQuestions={() => {
           let startIdx = 0;
-          let foundBlock = null;
           for (const b of SONG_BLOCKS) {
             for (const sub of b.subcats) {
-              if (b.id === block.id && sub.id === subcatId) {
+              if (b.id === block.id && sub.id === subcat.id) {
                 const blockIdx = SONG_BLOCKS.findIndex(x => x.id === b.id);
                 setCurrentBlockIdx(blockIdx);
                 setSongQIdx(startIdx);
@@ -454,14 +474,6 @@ export default function App() {
               startIdx += sub.items.length;
             }
           }
-          // fallback — start at block beginning
-          let blockStart = 0;
-          for (const b of SONG_BLOCKS) {
-            if (b.id === block.id) break;
-            b.subcats.forEach(s => { blockStart += s.items.length; });
-          }
-          setSongQIdx(blockStart);
-          setPhase("song-questions");
         }}
       />
     );
@@ -771,12 +783,16 @@ export default function App() {
   if (phase === "song-questions") {
     const q = SONG_QUESTIONS[songQIdx];
     if (!q) { setPhase("song-block-home"); return null; }
+    // Progress shown to the person is scoped to the current subcategory
+    // (e.g. "3/11" within Spotify), not the whole song.
+    const subcatQuestions = SONG_QUESTIONS.filter(item => item.subcatId === q.subcatId);
+    const subcatPosition = subcatQuestions.findIndex(item => item.id === q.id);
     return (
       <SwipeCard
         question={q}
         onAnswer={handleSongAnswer}
-        currentIndex={songQIdx + 1}
-        total={SONG_QUESTIONS.length}
+        currentIndex={subcatPosition + 1}
+        total={subcatQuestions.length}
         answers={currentSong?.answers || {}}
         blockLabel={q.blockLabel}
         subcatLabel={q.subcatLabel}
