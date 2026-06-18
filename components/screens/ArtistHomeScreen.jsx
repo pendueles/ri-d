@@ -1,224 +1,264 @@
 // components/screens/ArtistHomeScreen.jsx
+import { useState } from "react";
 import { theme, isDark } from "../../theme/theme";
 import { calcBlockScore, calcTotalScore } from "../../utils/scoring";
 import { ARTIST_BLOCKS, SONG_BLOCKS } from "../../data/questions";
 import { getArtists, useFirebaseStore } from "../../firebase/store";
+import { getPendingTasks } from "../../utils/helpers";
+
+const PRIORITY_COLOR = { Alta: "#E24B4A", Media: "#BA7517", Baja: "#378ADD" };
+
+function KpiCard({ label, value, onClick }) {
+  const [hover, setHover] = useState(false);
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        flex: 1,
+        background: "#ffffff",
+        border: "1px solid #EAEAEA",
+        borderRadius: "20px",
+        padding: "20px",
+        textAlign: "center",
+        cursor: "pointer",
+        boxShadow: hover ? "0 8px 20px rgba(0,0,0,0.08)" : "0 1px 3px rgba(0,0,0,0.04)",
+        transform: hover ? "translateY(-3px)" : "none",
+        transition: "all 0.2s ease",
+      }}>
+      <div style={{ fontFamily: "Arial,sans-serif", fontSize: "13px", fontWeight: "700", color: "#888888", letterSpacing: "0.06em", marginBottom: "8px" }}>
+        {label.toUpperCase()}
+      </div>
+      <div style={{ fontFamily: "Arial,sans-serif", fontSize: "34px", fontWeight: "700", color: "#0a0a0a" }}>
+        {value !== null ? value : "—"}
+      </div>
+    </button>
+  );
+}
 
 export default function ArtistHomeScreen({ artistData, artistAnswers, onBlock, onResult, onBack, profile, onCatalogue, onNewProject, onEdit, onPending, onProfile }) {
   const t = theme(isDark());
   useFirebaseStore(); // re-render on Firebase changes
-
-  // Top=Resultado, top-right=DSPs, bot-right=Social,
-  // bottom=Video, bot-left=Authority, top-left=Rights
-  const vertices = [
-    { id:'result',    label:'Resultado', angle: -90 },
-    { id:'social',    label:'Social',    angle: -30 },
-    { id:'ytvideo',   label:'Video',     angle:  30 },
-    { id:'rights',    label:'Rights',    angle:  90 },
-    { id:'authority', label:'Authority', angle: 150 },
-    { id:'dsps',      label:'DSPs',      angle: 210 },
-  ];
+  const [hoverPending, setHoverPending] = useState(false);
 
   const rad = (deg) => deg * Math.PI / 180;
 
-  const getBlockScore = (id) => {
-    if (id === 'result') {
-      return Math.round(calcTotalScore(ARTIST_BLOCKS, artistAnswers)*10)/10;
-    }
-    const block = ARTIST_BLOCKS.find(b => b.id === id);
-    if (!block) return null;
-    const hasAnswers = block.subcats.some(s => s.items.some(item => artistAnswers[item.id] !== undefined));
-    return hasAnswers ? Math.round(calcBlockScore(block, artistAnswers)*10)/10 : null;
+  // Scores
+  const artistScore = Object.keys(artistAnswers).length > 0 ? Math.round(calcTotalScore(ARTIST_BLOCKS, artistAnswers) * 10) / 10 : null;
+  const liveArtist = getArtists().find(a => a.id === artistData?.id);
+  const artistProjects = (liveArtist?.projects || []).filter(p => p.artistId === artistData?.id);
+  const projScores = artistProjects.map(p => {
+    const ans = p.answers || {}; return Object.keys(ans).length > 0 ? calcTotalScore(SONG_BLOCKS, ans) : null;
+  }).filter(s => s !== null);
+  const catAvg = projScores.length > 0 ? Math.round(projScores.reduce((a, b) => a + b, 0) / projScores.length * 10) / 10 : null;
+  const generalScore = (() => {
+    if (catAvg !== null && artistScore !== null) return Math.round((catAvg * 0.7 + artistScore * 0.3) * 10) / 10;
+    if (catAvg !== null) return catAvg;
+    if (artistScore !== null) return artistScore;
+    return null;
+  })();
+
+  const artistVerts = [
+    { id: 'result', label: 'Resultado', angle: -90 }, { id: 'social', label: 'Social', angle: -30 },
+    { id: 'ytvideo', label: 'Video', angle: 30 }, { id: 'rights', label: 'Rights', angle: 90 },
+    { id: 'authority', label: 'Authority', angle: 150 }, { id: 'dsps', label: 'DSPs', angle: 210 },
+  ];
+
+  const getArtistBlockScore = (id) => {
+    if (id === 'result') return artistScore;
+    const b = ARTIST_BLOCKS.find(x => x.id === id); if (!b) return null;
+    const has = b.subcats.some(s => s.items.some(i => artistAnswers[i.id] !== undefined));
+    return has ? Math.round(calcBlockScore(b, artistAnswers) * 10) / 10 : null;
+  };
+  const getCatBlockScore = (id) => {
+    if (id === 'result') return catAvg;
+    const b = SONG_BLOCKS.find(x => x.id === id); if (!b) return null;
+    const scores = artistProjects.map(p => {
+      const ans = p.answers || {}; const has = b.subcats.some(s => s.items.some(i => ans[i.id] !== undefined));
+      return has ? calcBlockScore(b, ans) : null;
+    }).filter(s => s !== null);
+    return scores.length > 0 ? Math.round(scores.reduce((a, c) => a + c, 0) / scores.length * 10) / 10 : null;
+  };
+  const getGeneralBlockScore = (id) => {
+    if (id === 'result') return generalScore;
+    const a = getArtistBlockScore(id); const c = getCatBlockScore(id);
+    if (a !== null && c !== null) return Math.round((c * 0.7 + a * 0.3) * 10) / 10;
+    if (c !== null) return c; if (a !== null) return a; return null;
   };
 
-  const S = 340, cx = S/2, cy = S/2, R = 120;
-
-  // Data polygon — only for blocks with answers
-  const dataPolygon = (() => {
-    const sorted = [...vertices].sort((a, b) => a.angle - b.angle);
-    const pts = sorted.map(v => {
-      const score = getBlockScore(v.id);
-      if (score === null) return null;
-      const pct = Math.max(0.01, score / 100);
-      return { x: cx + R * pct * Math.cos(rad(v.angle)), y: cy + R * pct * Math.sin(rad(v.angle)) };
+  // Hexagon geometry — kept the same proportions as before, slightly bigger
+  const S = Math.min(window.innerWidth * 0.9, 320), cxh = S / 2, cyh = S / 2, R = S * 0.30;
+  const hexPts = artistVerts.map(v => ({ x: cxh + R * Math.cos(rad(v.angle)), y: cyh + R * Math.sin(rad(v.angle)) }));
+  const dataPoly = (() => {
+    const pts = [...artistVerts].sort((a, b) => a.angle - b.angle).map(v => {
+      const s = getGeneralBlockScore(v.id); if (s === null) return null;
+      const p = Math.max(0.01, s / 100);
+      return { x: cxh + R * p * Math.cos(rad(v.angle)), y: cyh + R * p * Math.sin(rad(v.angle)) };
     }).filter(Boolean);
-    if (pts.length === 0) return null;
-    return pts.map((p,i) => `${i===0?'M':'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ') + ' Z';
+    if (pts.length < 2) return null;
+    return pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ') + ' Z';
   })();
-  const hexPoints = vertices.map(v => ({
-    x: cx + R * Math.cos(rad(v.angle)),
-    y: cy + R * Math.sin(rad(v.angle)),
-  }));
+  const hasPhotoMask = !!artistData.photo && dataPoly !== null;
 
+  // Pending tasks — combine artist questions + all project (song) questions
+  const artistTasks = getPendingTasks(ARTIST_BLOCKS, artistAnswers);
+  const projectTasks = artistProjects.flatMap(p => getPendingTasks(SONG_BLOCKS, p.answers || {}));
+  const priorityRank = { Alta: 0, Media: 1, Baja: 2 };
+  const pendingTasks = [...artistTasks, ...projectTasks].sort((a, b) =>
+    priorityRank[a.priority] - priorityRank[b.priority] || b.impact - a.impact
+  );
 
   return (
-    <div style={{minHeight:'100dvh', background:t.bg, display:'flex', flexDirection:'column'}}>
+    <div style={{ minHeight: '100dvh', background: '#ffffff', display: 'flex', flexDirection: 'column' }}>
 
-      {/* Artist name — tappable to edit */}
-      <div style={{padding:'32px 24px 0', paddingTop:'max(32px,env(safe-area-inset-top,32px))', textAlign:'center'}}>
-        <button onClick={onEdit} style={{background:'transparent', border:'none', cursor:'pointer', padding:'4px 12px', borderRadius:'12px', display:'inline-flex', alignItems:'center', gap:'8px'}}>
-          {artistData.photo && (
-            <img src={artistData.photo} alt="" style={{width:'36px', height:'36px', borderRadius:'50%', objectFit:'cover', flexShrink:0}}/>
-          )}
-          <div style={{textAlign:'left'}}>
-            <div style={{fontFamily:'Arial,sans-serif', fontSize:'28px', fontWeight:'700', color:t.text, letterSpacing:'-0.5px', lineHeight:1}}>
-              {artistData.name}
-            </div>
-            {(() => {
-                const labels = artistData.labelUsers?.length > 0 ? artistData.labelUsers : [artistData.labelUser].filter(Boolean);
-                return labels.length > 0 ? (
-                  <div style={{fontFamily:'Arial,sans-serif', fontSize:'12px', color:t.text3, marginTop:'2px'}}>{labels.join(', ')}</div>
-                ) : null;
-              })()}
-          </div>
-          <span style={{fontSize:'14px', color:t.text3, marginLeft:'2px'}}>✎</span>
-        </button>
-      </div>
-
-      {/* Three hexagons — vertical on mobile */}
-      {(() => {
-        const rad = (deg) => deg * Math.PI / 180;
-
-        // Mini hex renderer
-        const MiniHex = ({ title, score, vertices: verts, getScore, onClick, size = 200 }) => {
-          const S = size, cxh = S/2, cyh = S/2, R = S * 0.30;
-          const hexPts = verts.map(v => ({ x: cxh + R * Math.cos(rad(v.angle)), y: cyh + R * Math.sin(rad(v.angle)) }));
-          const dataPoly = (() => {
-            const pts = [...verts].sort((a,b)=>a.angle-b.angle).map(v => {
-              const s = getScore(v.id); if (s===null) return null;
-              const p = Math.max(0.01, s/100);
-              return { x: cxh + R*p*Math.cos(rad(v.angle)), y: cyh + R*p*Math.sin(rad(v.angle)) };
-            }).filter(Boolean);
-            if (pts.length<2) return null;
-            return pts.map((p,i)=>`${i===0?'M':'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')+' Z';
-          })();
-
-          const inner = (
-            <div style={{display:'flex', flexDirection:'column', alignItems:'center', gap:'4px', background:'transparent', padding:'4px 8px', cursor: onClick ? 'pointer' : 'default'}}>
-              <div style={{fontFamily:'Arial,sans-serif', fontSize:'11px', fontWeight:'700', color:t.text3, letterSpacing:'0.12em', textTransform:'uppercase'}}>{title}</div>
-              <div style={{position:'relative', width:`${S}px`, height:`${S}px`}}>
-                <svg width={S} height={S} viewBox={`0 0 ${S} ${S}`} style={{position:'absolute', inset:0}}>
-                  {[0.33,0.66,1].map((sc,ri) => {
-                    const ps = hexPts.map(p => ({x:cxh+(p.x-cxh)*sc, y:cyh+(p.y-cyh)*sc}));
-                    return <path key={ri} d={ps.map((p,i)=>`${i===0?'M':'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')+' Z'} fill="none" stroke={t.border} strokeWidth="1"/>;
-                  })}
-                  {hexPts.map((p,i) => <line key={i} x1={cxh} y1={cyh} x2={p.x.toFixed(1)} y2={p.y.toFixed(1)} stroke={t.border} strokeWidth="1"/>)}
-                  {dataPoly && <path d={dataPoly} fill="rgba(232,21,27,0.12)" stroke="#E8151B" strokeWidth="1.5" strokeLinejoin="round"/>}
-                </svg>
-                {/* Vertex labels */}
-                {verts.map(v => {
-                  const s = getScore(v.id);
-                  const px = cxh + R * Math.cos(rad(v.angle));
-                  const py = cyh + R * Math.sin(rad(v.angle));
-                  const isRes = v.id === 'result';
-                  if (isRes) {
-                    return s !== null ? (
-                      <div key={v.id} style={{position:'absolute', left:`${px}px`, top:`${py}px`, transform:'translate(-50%,-50%)',
-                        background:t.accent, borderRadius:'20px', padding:'5px 12px',
-                        fontFamily:'Arial,sans-serif', fontSize: S > 200 ? '18px' : '13px', fontWeight:'700', color:'#fff', pointerEvents:'none', whiteSpace:'nowrap'}}>
-                        {s}
-                      </div>
-                    ) : null;
-                  }
-                  return (
-                    <div key={v.id} style={{position:'absolute', left:`${px}px`, top:`${py}px`, transform:'translate(-50%,-50%)',
-                      background: s!==null ? t.text : t.bg2,
-                      border:`1px solid ${s!==null ? t.text : t.border}`,
-                      borderRadius:'14px', padding:'3px 7px',
-                      fontFamily:'Arial,sans-serif', pointerEvents:'none', whiteSpace:'nowrap', textAlign:'center'}}>
-                      <div style={{fontSize:'8px', fontWeight:'700', color: s!==null ? t.bg : t.text3, letterSpacing:'0.05em', textTransform:'uppercase'}}>{v.label}</div>
-                      {s!==null && <div style={{fontSize:'10px', fontWeight:'700', color:t.bg, lineHeight:1}}>{s}</div>}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          );
-
-          return onClick
-            ? <button onClick={onClick} style={{background:'transparent', border:'none', padding:0}}>{inner}</button>
-            : <div>{inner}</div>;
-        };
-
-        // Scores
-        const artistScore = Object.keys(artistAnswers).length > 0 ? Math.round(calcTotalScore(ARTIST_BLOCKS, artistAnswers)*10)/10 : null;
-        const liveArtist = getArtists().find(a => a.id === artistData?.id);
-        const artistProjects = (liveArtist?.projects || []).filter(p => p.artistId === artistData?.id);
-        const projScores = artistProjects.map(p => {
-          const ans = p.answers||{}; return Object.keys(ans).length>0 ? calcTotalScore(SONG_BLOCKS, ans) : null;
-        }).filter(s=>s!==null);
-        const catAvg = projScores.length>0 ? Math.round(projScores.reduce((a,b)=>a+b,0)/projScores.length*10)/10 : null;
-        const generalScore = (() => {
-          if (catAvg!==null && artistScore!==null) return Math.round((catAvg*0.7+artistScore*0.3)*10)/10;
-          if (catAvg!==null) return catAvg;
-          if (artistScore!==null) return artistScore;
-          return null;
-        })();
-
-        // Block score getters
-        const getArtistBlockScore = (id) => {
-          if (id==='result') return artistScore;
-          const b = ARTIST_BLOCKS.find(x=>x.id===id); if (!b) return null;
-          const has = b.subcats.some(s=>s.items.some(i=>artistAnswers[i.id]!==undefined));
-          return has ? Math.round(calcBlockScore(b,artistAnswers)*10)/10 : null;
-        };
-        const getCatBlockScore = (id) => {
-          if (id==='result') return catAvg;
-          const b = SONG_BLOCKS.find(x=>x.id===id); if (!b) return null;
-          const scores = artistProjects.map(p => {
-            const ans=p.answers||{}; const has=b.subcats.some(s=>s.items.some(i=>ans[i.id]!==undefined));
-            return has ? calcBlockScore(b,ans) : null;
-          }).filter(s=>s!==null);
-          return scores.length>0 ? Math.round(scores.reduce((a,c)=>a+c,0)/scores.length*10)/10 : null;
-        };
-        const getGeneralBlockScore = (id) => {
-          if (id==='result') return generalScore;
-          const a = getArtistBlockScore(id); const c = getCatBlockScore(id);
-          if (a!==null && c!==null) return Math.round((c*0.7+a*0.3)*10)/10;
-          if (c!==null) return c; if (a!==null) return a; return null;
-        };
-
-        const artistVerts = [
-          {id:'result',label:'Resultado',angle:-90},{id:'social',label:'Social',angle:-30},
-          {id:'ytvideo',label:'Video',angle:30},{id:'rights',label:'Rights',angle:90},
-          {id:'authority',label:'Authority',angle:150},{id:'dsps',label:'DSPs',angle:210},
-        ];
-        const songVerts = [
-          {id:'result',label:'Resultado',angle:-90},{id:'social',label:'Social',angle:-30},
-          {id:'ytvideo',label:'Video',angle:30},{id:'rights',label:'Rights',angle:90},
-          {id:'authority',label:'Authority',angle:150},{id:'dsps',label:'DSPs',angle:210},
-        ];
-
-        return (
-          <div style={{flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'8px 16px', gap:'8px', overflowY:'auto', width:'100%'}}>
-            {/* General only */}
-            <MiniHex title="General" score={generalScore} vertices={artistVerts} getScore={getGeneralBlockScore} size={Math.min(window.innerWidth * 0.86, 400)}/>
-          </div>
-        );
-      })()}
-
-      {/* Action buttons */}
-      <div style={{padding:'12px 24px', paddingBottom:'max(24px,env(safe-area-inset-bottom,24px))', display:'flex', flexDirection:'column', gap:'10px'}}>
-        <div style={{display:'flex', gap:'10px'}}>
-          <button onClick={onProfile}
-            style={{flex:1, padding:'16px', background:t.card, border:`1.5px solid ${t.border}`, borderRadius:'14px', fontFamily:'Arial,sans-serif', fontSize:'16px', fontWeight:'700', color:t.text, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:'8px', boxShadow:`0 2px 8px ${t.shadow}`}}>
-            Perfil
-          </button>
-          <button onClick={onCatalogue}
-            style={{flex:1, padding:'16px', background:t.card, border:`1.5px solid ${t.border}`, borderRadius:'14px', fontFamily:'Arial,sans-serif', fontSize:'16px', fontWeight:'700', color:t.text, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:'8px', boxShadow:`0 2px 8px ${t.shadow}`}}>
-            Catálogo
-          </button>
-        </div>
-        <button onClick={onBack}
-          style={{display:'block', width:'100%', padding:'14px', background:'transparent', border:`1.5px solid ${t.border}`, borderRadius:'14px', fontFamily:'Arial,sans-serif', fontSize:'15px', fontWeight:'600', color:t.text2, cursor:'pointer'}}>
+      {/* Back button — top left, discreet, same language as the rest of the app */}
+      <div style={{ padding: '16px 20px', paddingTop: 'max(16px,env(safe-area-inset-top,16px))' }}>
+        <button onClick={onBack} style={{ background: 'transparent', border: 'none', color: '#aaaaaa', fontFamily: 'Arial,sans-serif', fontSize: '15px', cursor: 'pointer', padding: 0 }}>
           ← Roster
         </button>
       </div>
 
+      <div style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch', padding: '0 20px 32px', maxWidth: '480px', width: '100%', margin: '0 auto' }}>
+
+        {/* Header — name + team only */}
+        <div style={{ textAlign: 'center', marginBottom: '8px' }}>
+          <button onClick={onEdit} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 0 }}>
+            <div style={{ fontFamily: 'Arial,sans-serif', fontSize: '28px', fontWeight: '700', color: '#0a0a0a', letterSpacing: '-0.5px', lineHeight: 1 }}>
+              {artistData.name}
+            </div>
+            {(() => {
+              const labels = artistData.labelUsers?.length > 0 ? artistData.labelUsers : [artistData.labelUser].filter(Boolean);
+              return labels.length > 0 ? (
+                <div style={{ fontFamily: 'Arial,sans-serif', fontSize: '12px', color: '#aaaaaa', marginTop: '4px' }}>{labels.join(' · ')}</div>
+              ) : null;
+            })()}
+          </button>
+        </div>
+
+        {/* RI+D hexagon — the focal point of the screen */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '16px 0 8px' }}>
+          <div style={{ position: 'relative', width: `${S}px`, height: `${S}px` }}>
+            <svg width={S} height={S} viewBox={`0 0 ${S} ${S}`} style={{ position: 'absolute', inset: 0 }}>
+              {hasPhotoMask && (
+                <defs>
+                  <clipPath id="artistScoreMask">
+                    <path d={dataPoly} />
+                  </clipPath>
+                </defs>
+              )}
+              {[0.33, 0.66, 1].map((sc, ri) => {
+                const ps = hexPts.map(p => ({ x: cxh + (p.x - cxh) * sc, y: cyh + (p.y - cyh) * sc }));
+                return <path key={ri} d={ps.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ') + ' Z'} fill="none" stroke={t.border} strokeWidth="1" />;
+              })}
+              {hexPts.map((p, i) => <line key={i} x1={cxh} y1={cyh} x2={p.x.toFixed(1)} y2={p.y.toFixed(1)} stroke={t.border} strokeWidth="1" />)}
+              {hasPhotoMask ? (
+                <image href={artistData.photo} x={cxh - R} y={cyh - R} width={R * 2} height={R * 2} clipPath="url(#artistScoreMask)" preserveAspectRatio="xMidYMid slice" />
+              ) : (
+                dataPoly && <path d={dataPoly} fill="rgba(232,21,27,0.12)" stroke="#E8151B" strokeWidth="1.5" strokeLinejoin="round" />
+              )}
+              {hasPhotoMask && <path d={dataPoly} fill="none" stroke="#E8151B" strokeWidth="2" strokeLinejoin="round" />}
+            </svg>
+            {/* Vertex labels */}
+            {artistVerts.map(v => {
+              const s = getGeneralBlockScore(v.id);
+              const px = cxh + R * Math.cos(rad(v.angle));
+              const py = cyh + R * Math.sin(rad(v.angle));
+              const isRes = v.id === 'result';
+              if (isRes) {
+                return s !== null ? (
+                  <div key={v.id} style={{ position: 'absolute', left: `${px}px`, top: `${py}px`, transform: 'translate(-50%,-50%)',
+                    background: t.accent, borderRadius: '20px', padding: '6px 14px',
+                    fontFamily: 'Arial,sans-serif', fontSize: '20px', fontWeight: '700', color: '#fff', pointerEvents: 'none', whiteSpace: 'nowrap' }}>
+                    {s}
+                  </div>
+                ) : null;
+              }
+              return (
+                <div key={v.id} style={{ position: 'absolute', left: `${px}px`, top: `${py}px`, transform: 'translate(-50%,-50%)',
+                  background: s !== null ? (hasPhotoMask ? '#ffffff' : t.text) : t.bg2,
+                  border: `1px solid ${s !== null ? (hasPhotoMask ? '#ffffff' : t.text) : t.border}`,
+                  borderRadius: '14px', padding: '3px 7px',
+                  fontFamily: 'Arial,sans-serif', pointerEvents: 'none', whiteSpace: 'nowrap', textAlign: 'center' }}>
+                  <div style={{ fontSize: '8px', fontWeight: '700', color: s !== null ? (hasPhotoMask ? '#0a0a0a' : t.bg) : t.text3, letterSpacing: '0.05em', textTransform: 'uppercase' }}>{v.label}</div>
+                  {s !== null && <div style={{ fontSize: '10px', fontWeight: '700', color: hasPhotoMask ? '#0a0a0a' : t.bg, lineHeight: 1 }}>{s}</div>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Main KPI cards — Perfil + Catálogo, same size and weight */}
+        <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
+          <KpiCard label="Perfil" value={artistScore} onClick={onProfile} />
+          <KpiCard label="Catálogo" value={artistProjects.length} onClick={onCatalogue} />
+        </div>
+
+        {/* Pending tasks — full width, operations-center feel */}
+        <button
+          onClick={onPending}
+          onMouseEnter={() => setHoverPending(true)}
+          onMouseLeave={() => setHoverPending(false)}
+          style={{
+            display: 'block',
+            width: '100%',
+            textAlign: 'left',
+            marginTop: '12px',
+            background: '#ffffff',
+            border: '1px solid #EAEAEA',
+            borderRadius: '20px',
+            padding: '20px',
+            cursor: 'pointer',
+            boxShadow: hoverPending ? '0 8px 20px rgba(0,0,0,0.08)' : '0 1px 3px rgba(0,0,0,0.04)',
+            transform: hoverPending ? 'translateY(-3px)' : 'none',
+            transition: 'all 0.2s ease',
+          }}>
+          <div style={{ fontFamily: 'Arial,sans-serif', fontSize: '13px', fontWeight: '700', color: '#888888', letterSpacing: '0.06em', marginBottom: '4px' }}>
+            TAREAS PENDIENTES
+          </div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '16px' }}>
+            <div style={{ fontFamily: 'Arial,sans-serif', fontSize: '34px', fontWeight: '700', color: '#0a0a0a' }}>{pendingTasks.length}</div>
+            <div style={{ fontFamily: 'Arial,sans-serif', fontSize: '13px', color: '#aaaaaa' }}>Pendientes de resolver</div>
+          </div>
+
+          {pendingTasks.length === 0 ? (
+            <div style={{ fontFamily: 'Arial,sans-serif', fontSize: '14px', color: '#aaaaaa', borderTop: '1px solid #F2F2F2', paddingTop: '14px' }}>
+              Todo al día — no hay tareas pendientes
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {pendingTasks.slice(0, 4).map(task => (
+                <div key={task.id} style={{ borderTop: '1px solid #F2F2F2', paddingTop: '10px' }}>
+                  <div style={{ fontFamily: 'Arial,sans-serif', fontSize: '14px', fontWeight: '700', color: '#0a0a0a', marginBottom: '4px' }}>
+                    {task.title}
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <span style={{ fontFamily: 'Arial,sans-serif', fontSize: '11px', color: '#aaaaaa' }}>{task.category}</span>
+                    <span style={{ fontFamily: 'Arial,sans-serif', fontSize: '11px', fontWeight: '700', color: PRIORITY_COLOR[task.priority] }}>{task.priority} prioridad</span>
+                    <span style={{ fontFamily: 'Arial,sans-serif', fontSize: '11px', fontWeight: '700', color: '#639922', marginLeft: 'auto' }}>+{task.impact} pts</span>
+                  </div>
+                </div>
+              ))}
+              {pendingTasks.length > 4 && (
+                <div style={{ fontFamily: 'Arial,sans-serif', fontSize: '12px', color: '#aaaaaa', borderTop: '1px solid #F2F2F2', paddingTop: '10px' }}>
+                  + {pendingTasks.length - 4} tareas más
+                </div>
+              )}
+            </div>
+          )}
+        </button>
+
+        {/* Administrative info — lowest visual weight */}
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', marginTop: '20px' }}>
+          <button onClick={onEdit} style={{ background: 'transparent', border: 'none', color: '#cccccc', fontFamily: 'Arial,sans-serif', fontSize: '12px', cursor: 'pointer', padding: '6px' }}>
+            Editar perfil
+          </button>
+          <button onClick={onNewProject} style={{ background: 'transparent', border: 'none', color: '#cccccc', fontFamily: 'Arial,sans-serif', fontSize: '12px', cursor: 'pointer', padding: '6px' }}>
+            + Nueva canción
+          </button>
+        </div>
+
+      </div>
     </div>
   );
 }
-
-// ═══════════════════════════════════════════
-// ARTIST PROFILE SCREEN — single hexagon with all 6 blocks
-// ═══════════════════════════════════════════
