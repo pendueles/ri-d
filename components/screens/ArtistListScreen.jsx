@@ -4,7 +4,7 @@ import { theme, isDark } from "../../theme/theme";
 import { scoreColor } from "../../utils/helpers";
 import { calcTotalScore } from "../../utils/scoring";
 import { getArtists, saveOneArtist, useFirebaseStore, deleteArtists, getLabelUsers, getMgmtUsers, saveMgmtUsers } from "../../firebase/store";
-import { ARTIST_BLOCKS } from "../../data/questions";
+import { ARTIST_BLOCKS, SONG_BLOCKS } from "../../data/questions";
 
 export default function ArtistListScreen({ profile, onBack, onSelect, onCreate, liveArtists }) {
   const t = theme(isDark());
@@ -24,11 +24,20 @@ export default function ArtistListScreen({ profile, onBack, onSelect, onCreate, 
 
   const canEdit = profile.type === 'label' || profile.type === 'admin';
 
-  // Score helpers for KPI cards
+  // Score helpers for KPI cards — general score, weighting catalogue (70%)
+  // and profile (30%), same formula used on the artist home screen.
   const getArtistScore = (artist) => {
     const ans = artist.answers || {};
-    if (Object.keys(ans).length === 0) return null;
-    return Math.round(calcTotalScore(ARTIST_BLOCKS, ans) * 10) / 10;
+    const artistScore = Object.keys(ans).length > 0 ? Math.round(calcTotalScore(ARTIST_BLOCKS, ans) * 10) / 10 : null;
+    const projScores = (artist.projects || []).map(p => {
+      const pAns = p.answers || {};
+      return Object.keys(pAns).length > 0 ? calcTotalScore(SONG_BLOCKS, pAns) : null;
+    }).filter(s => s !== null);
+    const catAvg = projScores.length > 0 ? Math.round(projScores.reduce((a, b) => a + b, 0) / projScores.length * 10) / 10 : null;
+    if (catAvg !== null && artistScore !== null) return Math.round((catAvg * 0.7 + artistScore * 0.3) * 10) / 10;
+    if (catAvg !== null) return catAvg;
+    if (artistScore !== null) return artistScore;
+    return null;
   };
 
   const kpiColor = (score) => {
