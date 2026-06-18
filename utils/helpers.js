@@ -64,3 +64,29 @@ export function compressImage(file, maxDimension = 400, quality = 0.7) {
     reader.readAsDataURL(file);
   });
 }
+
+// Build a flat, sorted list of pending tasks (unanswered or answered "no")
+// from a set of question blocks + answers. Priority is derived from each
+// question's weight, since higher-weight items move the score the most.
+export function getPendingTasks(blocks, answers) {
+  const tasks = [];
+  blocks.forEach(block => {
+    block.subcats.forEach(sub => {
+      sub.items.forEach(item => {
+        if (answers[item.id] === true) return; // already resolved
+        const priority = item.w >= 8 ? "Alta" : item.w >= 4 ? "Media" : "Baja";
+        tasks.push({
+          id: item.id,
+          title: item.q,
+          category: block.label,
+          blockId: block.id,
+          priority,
+          impact: item.w,
+          status: answers[item.id] === false ? "No cumple" : "Sin revisar",
+        });
+      });
+    });
+  });
+  const priorityRank = { Alta: 0, Media: 1, Baja: 2 };
+  return tasks.sort((a, b) => priorityRank[a.priority] - priorityRank[b.priority] || b.impact - a.impact);
+}
