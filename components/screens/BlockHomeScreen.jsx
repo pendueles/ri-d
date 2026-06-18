@@ -139,8 +139,19 @@ export default function BlockHomeScreen({ block, artistAnswers, onSubcat, onBack
   // Pending tasks scoped to this block only
   const pendingCount = getPendingTasks([block], artistAnswers).length;
 
-  // Subcategory KPI cards — same order as the hexagon vertices (excluding "result")
-  const subcatCards = vertices.filter(v => v.id !== 'result');
+  // KPI card order — independent from the hexagon vertex angles, as requested
+  const getCardOrder = () => {
+    if (block.id === 'dsps') return ['spotify', 'apple', 'ytmusic', 'otherdsps', 'soundcloud'];
+    if (block.id === 'social') return ['instagram', 'tiktok', 'x', 'rrss_alt', 'web'];
+    if (block.id === 'authority') return ['lyrics', 'wikipedia', 'googlepanel', 'musicbrainz', 'composer'];
+    if (block.id === 'ytvideo') return ['accesos', 'configuracion', 'organizacion', 'diseno', 'contenido'];
+    if (block.id === 'rights') return ['publishing', 'sgae', 'agedi', 'soundexchange', 'aie'];
+    return null;
+  };
+  const cardOrder = getCardOrder();
+  const subcatCards = cardOrder
+    ? cardOrder.map(id => vertices.find(v => v.id === id)).filter(Boolean)
+    : vertices.filter(v => v.id !== 'result');
 
   return (
     <div style={{minHeight:'100dvh', background:'#ffffff', display:'flex', flexDirection:'column'}}>
@@ -198,6 +209,8 @@ export default function BlockHomeScreen({ block, artistAnswers, onSubcat, onBack
               const score = getSubcatScore(v.id);
               const isTotal = v.id === 'result';
               const hasScore = score !== null;
+              // Scale the label font down for long names so they still fit on one line
+              const labelFontSize = v.label.length > 16 ? '6.5px' : v.label.length > 11 ? '7.5px' : '9px';
               return (
                 <button key={v.id}
                   onClick={() => !isTotal && onSubcat(v.id)}
@@ -206,12 +219,12 @@ export default function BlockHomeScreen({ block, artistAnswers, onSubcat, onBack
                     background: isTotal ? t.accent : hasScore ? t.text : t.bg,
                     border:`1.5px solid ${isTotal ? t.accent : hasScore ? t.text : t.border}`,
                     borderRadius:'16px', padding:'6px 10px', cursor: isTotal ? 'default' : 'pointer',
-                    minWidth:'62px', maxWidth:'108px', minHeight:'40px',
+                    minWidth:'62px', maxWidth:'118px', minHeight:'40px', width:'max-content',
                     boxShadow: hasScore||isTotal ? `0 2px 10px ${t.shadow}` : 'none', transition:'all 0.2s'}}>
                   {!isTotal && (
-                    <div style={{fontFamily:'Arial,sans-serif', fontSize:'9px', fontWeight:'700',
-                      color: hasScore ? t.bg : t.text2, letterSpacing:'0.05em', textTransform:'uppercase',
-                      whiteSpace:'normal', wordBreak:'break-word', textAlign:'center', lineHeight:'1.25'}}>
+                    <div style={{fontFamily:'Arial,sans-serif', fontSize:labelFontSize, fontWeight:'700',
+                      color: hasScore ? t.bg : t.text2, letterSpacing:'0.03em', textTransform:'uppercase',
+                      whiteSpace:'nowrap', textAlign:'center', lineHeight:'1.25'}}>
                       {v.label}
                     </div>
                   )}
