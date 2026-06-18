@@ -25,6 +25,7 @@ export default function App() {
   const [profile, setProfile] = useState(null); // never persisted — always ask on load
   const saveProfile = (p) => { setProfile(p); };
   const [phase, setPhase] = useState("welcome");
+  const [pendingInitialView, setPendingInitialView] = useState("overview");
   const [artistData, setArtistData] = useState({});
   const [artistAnswers, setArtistAnswers] = useState({});
   const [artistQIdx, setArtistQIdx] = useState(0);
@@ -513,7 +514,7 @@ export default function App() {
         onResult={() => setPhase("artist-result")}
         onEdit={() => setPhase("artist-edit")}
         onCatalogue={() => setPhase("artist-catalogue")}
-        onPending={() => setPhase("artist-pending")}
+        onPending={() => { setPendingInitialView("overview"); setPhase("artist-pending"); }}
         onProfile={() => setPhase("artist-profile")}
         onNewProject={() => {
           setCurrentSong({ data: { artistName: artistData.name, linkedArtist: artistData }, answers: {} });
@@ -538,7 +539,7 @@ export default function App() {
         artistAnswers={artistAnswers}
         onBack={() => setPhase("artist-home")}
         onResult={() => setPhase("artist-result")}
-        onPending={() => setPhase("artist-pending")}
+        onPending={() => { setPendingInitialView("perfil"); setPhase("artist-pending"); }}
         onBlock={(blockId) => {
           const idx = ARTIST_BLOCKS.findIndex(b => b.id === blockId);
           if (idx === -1) return;
@@ -560,7 +561,8 @@ export default function App() {
         artistProjects={artistProjectsForPending}
         artistBlocks={ARTIST_BLOCKS}
         songBlocks={SONG_BLOCKS}
-        onBack={() => setPhase("artist-home")}
+        initialView={pendingInitialView}
+        onBack={() => setPhase(pendingInitialView === "perfil" ? "artist-profile" : "artist-home")}
         onGoToProfileQuestion={(itemId) => {
           const qIdx = ARTIST_QUESTIONS.findIndex(q => q.id === itemId);
           if (qIdx === -1) return;
