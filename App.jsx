@@ -5,7 +5,7 @@ import { ARTIST_BLOCKS, ARTIST_QUESTIONS, SONG_BLOCKS, SONG_QUESTIONS,
   RIMAS_LOGO, ICON_ARTISTA, ICON_PROYECTO } from "./data";
 import { HexRadarTotal, SplashScreen } from "./components/ui";
 import { SwipeCard, SubcatSummaryScreen, BlockSummaryScreen, TotalSummaryScreen, PendingTasksScreen } from "./components/quiz";
-import { ProfileSelect, HomeDashboard, BlockHomeScreen, ArtistHomeScreen, ArtistProfileScreen, ProjectHomeScreen,
+import { ProfileSelect, HomeDashboard, BlockHomeScreen, ArtistHomeScreen, ArtistPendingScreen, ArtistProfileScreen, ProjectHomeScreen,
   ArtistListScreen, ProjectListScreen, ArtistCatalogueScreen, ClientsListScreen, LabelManagersListScreen } from "./components/screens";
 import { NewArtistForm, ProjectForm, NewLabelManagerScreen, ArtistEditScreen, ProjectEditScreen } from "./components/forms";
 import {
@@ -551,21 +551,40 @@ export default function App() {
 
   // ARTIST PENDING TASKS
   if (phase === "artist-pending") {
+    const liveArtistForPending = getArtists().find(a => a.id === artistData?.id);
+    const artistProjectsForPending = (liveArtistForPending?.projects || []).filter(p => p.artistId === artistData?.id);
+
     return (
-      <PendingTasksScreen
-        blocks={ARTIST_BLOCKS}
-        answers={artistAnswers}
-        title={artistData.name}
+      <ArtistPendingScreen
+        artistAnswers={artistAnswers}
+        artistProjects={artistProjectsForPending}
+        artistBlocks={ARTIST_BLOCKS}
+        songBlocks={SONG_BLOCKS}
         onBack={() => setPhase("artist-home")}
-        onGoToQuestion={(qIdx) => {
+        onGoToProfileQuestion={(itemId) => {
+          const qIdx = ARTIST_QUESTIONS.findIndex(q => q.id === itemId);
+          if (qIdx === -1) return;
           setArtistQIdx(qIdx);
-          // Set current block based on question index
           let count = 0;
           for (let i = 0; i < ARTIST_BLOCKS.length; i++) {
             ARTIST_BLOCKS[i].subcats.forEach(s => { count += s.items.length; });
             if (qIdx < count) { setCurrentBlockIdx(i); break; }
           }
           setPhase("artist-questions");
+        }}
+        onGoToProjectQuestion={(task) => {
+          const project = artistProjectsForPending.find(p => p.id === task.projectId);
+          if (!project) return;
+          const qIdx = SONG_QUESTIONS.findIndex(q => q.id === task.id);
+          if (qIdx === -1) return;
+          setCurrentSong({ data: { ...project, linkedArtist: { id: artistData.id, name: artistData.name } }, answers: project.answers || {} });
+          setSongQIdx(qIdx);
+          let count = 0;
+          for (let i = 0; i < SONG_BLOCKS.length; i++) {
+            SONG_BLOCKS[i].subcats.forEach(s => { count += s.items.length; });
+            if (qIdx < count) { setCurrentBlockIdx(i); break; }
+          }
+          setPhase("song-questions");
         }}
       />
     );
