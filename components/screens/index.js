@@ -2,6 +2,7 @@
 export { default as ProfileSelect } from "./ProfileSelect";
 export { default as HomeDashboard } from "./HomeDashboard";
 export { default as BlockHomeScreen } from "./BlockHomeScreen";
+export { default as SubcatHomeScreen } from "./SubcatHomeScreen";
 export { default as ArtistHomeScreen } from "./ArtistHomeScreen";
 export { default as ArtistPendingScreen } from "./ArtistPendingScreen";
 export { default as ArtistProfileScreen } from "./ArtistProfileScreen";
