@@ -462,8 +462,9 @@ export default function App() {
         block={block}
         artistAnswers={artistAnswers}
         artistName={artistData.name}
-        onBack={() => setPhase("artist-home")}
+        onBack={() => setPhase("artist-profile")}
         onGoHome={() => setPhase("artist-home")}
+        onPending={() => { setPendingInitialView("perfil"); setPhase("artist-pending"); }}
         onSubcat={(subcatId) => {
           let startIdx = 0;
           for (const b of ARTIST_BLOCKS) {
