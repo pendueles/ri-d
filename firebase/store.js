@@ -78,9 +78,12 @@ export async function saveOneArtist(artist) {
     console.error("❌ artist save failed:", e.code, e.message);
     _firebaseError = `${e.code}: ${e.message}`; notifyListeners();
   }
+  // Persist all answered questions, true ("sí") and false ("no") alike —
+  // "no" answers are what power the pending-tasks feature, and the
+  // payload size here is trivial (a few hundred booleans at most).
   if (answers && Object.keys(answers).length > 0) {
     const compressed = {};
-    Object.entries(answers).forEach(([k,v]) => { if (v === true) compressed[k] = true; });
+    Object.entries(answers).forEach(([k, v]) => { if (v === true || v === false) compressed[k] = v; });
     setDoc(doc(db, "artistAnswers", artist.id), compressed).catch(() => {});
   }
 }
@@ -91,7 +94,7 @@ export async function saveOneArtist(artist) {
 export async function saveProject(project, artistId) {
   if (!project?.id || !artistId) { console.error("saveProject: missing id/artistId"); return false; }
   const answers = {};
-  Object.entries(project.answers || {}).forEach(([k,v]) => { if (v === true) answers[k] = true; });
+  Object.entries(project.answers || {}).forEach(([k, v]) => { if (v === true || v === false) answers[k] = v; });
   const { linkedArtist, photo, ...rest } = project;
   const p = {
     ...rest,
