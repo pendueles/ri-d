@@ -52,21 +52,24 @@ function TaskRow({ task, onClick }) {
 // Two KPI cards (Perfil / Catálogo) leading into the detailed task list for
 // whichever the person taps — mirrors the Perfil/Catálogo cards on the
 // artist home screen, just scoped to pending ("answered no") tasks.
-export default function ArtistPendingScreen({ artistAnswers, artistProjects, artistBlocks, songBlocks, onBack, onGoToProfileQuestion, onGoToProjectQuestion, initialView = "overview" }) {
+export default function ArtistPendingScreen({ artistAnswers, artistProjects, artistBlocks, songBlocks, onBack, onGoToProfileQuestion, onGoToProjectQuestion, initialView = "overview", blockFilter = null }) {
   const t = theme(isDark());
   const [view, setView] = useState(initialView); // "overview" | "perfil" | "catalogo"
   const skippedOverview = initialView !== "overview"; // came directly from Perfil/Catálogo card elsewhere in the app
 
-  const profileTasks = getPendingTasks(artistBlocks, artistAnswers);
+  // When entering scoped to a single block (e.g. DSPs), only that block's
+  // questions count — the screen acts as a dedicated list, not the full profile.
+  const effectiveBlocks = blockFilter ? artistBlocks.filter(b => b.id === blockFilter.id) : artistBlocks;
+  const profileTasks = getPendingTasks(effectiveBlocks, artistAnswers);
   const catalogueTasks = (artistProjects || []).flatMap(p =>
     getPendingTasks(songBlocks, p.answers || {}).map(t => ({ ...t, projectId: p.id, projectTitle: p.title }))
   );
 
-  const title = view === "perfil" ? "Perfil" : view === "catalogo" ? "Catálogo" : "Tareas pendientes";
-  const tasks = view === "perfil" ? profileTasks : view === "catalogo" ? catalogueTasks : [];
+  const title = blockFilter ? blockFilter.label : view === "perfil" ? "Perfil" : view === "catalogo" ? "Catálogo" : "Tareas pendientes";
+  const tasks = blockFilter ? profileTasks : view === "perfil" ? profileTasks : view === "catalogo" ? catalogueTasks : [];
   const priorityRank = { Alta: 0, Media: 1, Baja: 2 };
   const sortedTasks = [...tasks].sort((a, b) => priorityRank[a.priority] - priorityRank[b.priority] || b.impact - a.impact);
-  const showOverviewButton = view !== "overview" && !skippedOverview;
+  const showOverviewButton = !blockFilter && view !== "overview" && !skippedOverview;
 
   return (
     <div style={{ minHeight: "100dvh", background: "#ffffff", display: "flex", flexDirection: "column" }}>
@@ -79,7 +82,7 @@ export default function ArtistPendingScreen({ artistAnswers, artistProjects, art
       </div>
 
       <div style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", padding: "24px 20px", maxWidth: "480px", width: "100%", margin: "0 auto" }}>
-        {view === "overview" ? (
+        {(!blockFilter && view === "overview") ? (
           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
             <KpiCard label="Perfil" value={profileTasks.length} onClick={() => setView("perfil")} />
             <KpiCard label="Catálogo" value={catalogueTasks.length} onClick={() => setView("catalogo")} />
@@ -95,7 +98,7 @@ export default function ArtistPendingScreen({ artistAnswers, artistProjects, art
               <TaskRow
                 key={`${task.id}-${task.projectId || 'profile'}-${i}`}
                 task={task}
-                onClick={() => view === "perfil" ? onGoToProfileQuestion(task.id) : onGoToProjectQuestion(task)}
+                onClick={() => (blockFilter || view === "perfil") ? onGoToProfileQuestion(task.id) : onGoToProjectQuestion(task)}
               />
             ))}
           </div>
