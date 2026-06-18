@@ -28,7 +28,6 @@ export default function ProjectListScreen({ profile, onBack, onCreate, onSelect 
 
   const myArtistIds = new Set(myArtists.map(a => a.id));
   const getProjectScore = (p) => {
-    if (p.score !== undefined && p.score !== null) return p.score;
     if (p.answers && Object.keys(p.answers).length > 0) return Math.round(calcTotalScore(SONG_BLOCKS, p.answers) * 10) / 10;
     return null;
   };
