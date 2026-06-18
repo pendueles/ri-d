@@ -6,8 +6,6 @@ import { ARTIST_BLOCKS, SONG_BLOCKS } from "../../data/questions";
 import { getArtists, useFirebaseStore } from "../../firebase/store";
 import { getPendingTasks } from "../../utils/helpers";
 
-const PRIORITY_COLOR = { Alta: "#E24B4A", Media: "#BA7517", Baja: "#378ADD" };
-
 function KpiCard({ label, value, onClick }) {
   const [hover, setHover] = useState(false);
   return (
@@ -40,7 +38,6 @@ function KpiCard({ label, value, onClick }) {
 export default function ArtistHomeScreen({ artistData, artistAnswers, onBlock, onResult, onBack, profile, onCatalogue, onNewProject, onEdit, onPending, onProfile }) {
   const t = theme(isDark());
   useFirebaseStore(); // re-render on Firebase changes
-  const [hoverPending, setHoverPending] = useState(false);
 
   const rad = (deg) => deg * Math.PI / 180;
 
@@ -99,7 +96,6 @@ export default function ArtistHomeScreen({ artistData, artistAnswers, onBlock, o
     if (pts.length < 2) return null;
     return pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ') + ' Z';
   })();
-  const hasPhotoMask = !!artistData.photo && dataPoly !== null;
 
   // Pending tasks — combine artist questions + all project (song) questions
   const artistTasks = getPendingTasks(ARTIST_BLOCKS, artistAnswers);
@@ -140,24 +136,12 @@ export default function ArtistHomeScreen({ artistData, artistAnswers, onBlock, o
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '16px 0 8px' }}>
           <div style={{ position: 'relative', width: `${S}px`, height: `${S}px` }}>
             <svg width={S} height={S} viewBox={`0 0 ${S} ${S}`} style={{ position: 'absolute', inset: 0 }}>
-              {hasPhotoMask && (
-                <defs>
-                  <clipPath id="artistScoreMask">
-                    <path d={dataPoly} />
-                  </clipPath>
-                </defs>
-              )}
               {[0.33, 0.66, 1].map((sc, ri) => {
                 const ps = hexPts.map(p => ({ x: cxh + (p.x - cxh) * sc, y: cyh + (p.y - cyh) * sc }));
                 return <path key={ri} d={ps.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ') + ' Z'} fill="none" stroke={t.border} strokeWidth="1" />;
               })}
               {hexPts.map((p, i) => <line key={i} x1={cxh} y1={cyh} x2={p.x.toFixed(1)} y2={p.y.toFixed(1)} stroke={t.border} strokeWidth="1" />)}
-              {hasPhotoMask ? (
-                <image href={artistData.photo} x={cxh - R} y={cyh - R} width={R * 2} height={R * 2} clipPath="url(#artistScoreMask)" preserveAspectRatio="xMidYMid slice" />
-              ) : (
-                dataPoly && <path d={dataPoly} fill="rgba(232,21,27,0.12)" stroke="#E8151B" strokeWidth="1.5" strokeLinejoin="round" />
-              )}
-              {hasPhotoMask && <path d={dataPoly} fill="none" stroke="#E8151B" strokeWidth="2" strokeLinejoin="round" />}
+              {dataPoly && <path d={dataPoly} fill="rgba(232,21,27,0.12)" stroke="#E8151B" strokeWidth="1.5" strokeLinejoin="round" />}
             </svg>
             {/* Vertex labels */}
             {artistVerts.map(v => {
@@ -176,77 +160,24 @@ export default function ArtistHomeScreen({ artistData, artistAnswers, onBlock, o
               }
               return (
                 <div key={v.id} style={{ position: 'absolute', left: `${px}px`, top: `${py}px`, transform: 'translate(-50%,-50%)',
-                  background: s !== null ? (hasPhotoMask ? '#ffffff' : t.text) : t.bg2,
-                  border: `1px solid ${s !== null ? (hasPhotoMask ? '#ffffff' : t.text) : t.border}`,
+                  background: s !== null ? t.text : t.bg2,
+                  border: `1px solid ${s !== null ? t.text : t.border}`,
                   borderRadius: '14px', padding: '3px 7px',
                   fontFamily: 'Arial,sans-serif', pointerEvents: 'none', whiteSpace: 'nowrap', textAlign: 'center' }}>
-                  <div style={{ fontSize: '8px', fontWeight: '700', color: s !== null ? (hasPhotoMask ? '#0a0a0a' : t.bg) : t.text3, letterSpacing: '0.05em', textTransform: 'uppercase' }}>{v.label}</div>
-                  {s !== null && <div style={{ fontSize: '10px', fontWeight: '700', color: hasPhotoMask ? '#0a0a0a' : t.bg, lineHeight: 1 }}>{s}</div>}
+                  <div style={{ fontSize: '8px', fontWeight: '700', color: s !== null ? t.bg : t.text3, letterSpacing: '0.05em', textTransform: 'uppercase' }}>{v.label}</div>
+                  {s !== null && <div style={{ fontSize: '10px', fontWeight: '700', color: t.bg, lineHeight: 1 }}>{s}</div>}
                 </div>
               );
             })}
           </div>
         </div>
 
-        {/* Main KPI cards — Perfil + Catálogo, same size and weight */}
-        <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
+        {/* Main KPI cards — Perfil, Catálogo, Tareas pendientes — stacked, same size and weight */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '20px' }}>
           <KpiCard label="Perfil" value={artistScore} onClick={onProfile} />
           <KpiCard label="Catálogo" value={artistProjects.length} onClick={onCatalogue} />
+          <KpiCard label="Tareas pendientes" value={pendingTasks.length} onClick={onPending} />
         </div>
-
-        {/* Pending tasks — full width, operations-center feel */}
-        <button
-          onClick={onPending}
-          onMouseEnter={() => setHoverPending(true)}
-          onMouseLeave={() => setHoverPending(false)}
-          style={{
-            display: 'block',
-            width: '100%',
-            textAlign: 'left',
-            marginTop: '12px',
-            background: '#ffffff',
-            border: '1px solid #EAEAEA',
-            borderRadius: '20px',
-            padding: '20px',
-            cursor: 'pointer',
-            boxShadow: hoverPending ? '0 8px 20px rgba(0,0,0,0.08)' : '0 1px 3px rgba(0,0,0,0.04)',
-            transform: hoverPending ? 'translateY(-3px)' : 'none',
-            transition: 'all 0.2s ease',
-          }}>
-          <div style={{ fontFamily: 'Arial,sans-serif', fontSize: '13px', fontWeight: '700', color: '#888888', letterSpacing: '0.06em', marginBottom: '4px' }}>
-            TAREAS PENDIENTES
-          </div>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '16px' }}>
-            <div style={{ fontFamily: 'Arial,sans-serif', fontSize: '34px', fontWeight: '700', color: '#0a0a0a' }}>{pendingTasks.length}</div>
-            <div style={{ fontFamily: 'Arial,sans-serif', fontSize: '13px', color: '#aaaaaa' }}>Pendientes de resolver</div>
-          </div>
-
-          {pendingTasks.length === 0 ? (
-            <div style={{ fontFamily: 'Arial,sans-serif', fontSize: '14px', color: '#aaaaaa', borderTop: '1px solid #F2F2F2', paddingTop: '14px' }}>
-              Todo al día — no hay tareas pendientes
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {pendingTasks.slice(0, 4).map(task => (
-                <div key={task.id} style={{ borderTop: '1px solid #F2F2F2', paddingTop: '10px' }}>
-                  <div style={{ fontFamily: 'Arial,sans-serif', fontSize: '14px', fontWeight: '700', color: '#0a0a0a', marginBottom: '4px' }}>
-                    {task.title}
-                  </div>
-                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                    <span style={{ fontFamily: 'Arial,sans-serif', fontSize: '11px', color: '#aaaaaa' }}>{task.category}</span>
-                    <span style={{ fontFamily: 'Arial,sans-serif', fontSize: '11px', fontWeight: '700', color: PRIORITY_COLOR[task.priority] }}>{task.priority} prioridad</span>
-                    <span style={{ fontFamily: 'Arial,sans-serif', fontSize: '11px', fontWeight: '700', color: '#639922', marginLeft: 'auto' }}>+{task.impact} pts</span>
-                  </div>
-                </div>
-              ))}
-              {pendingTasks.length > 4 && (
-                <div style={{ fontFamily: 'Arial,sans-serif', fontSize: '12px', color: '#aaaaaa', borderTop: '1px solid #F2F2F2', paddingTop: '10px' }}>
-                  + {pendingTasks.length - 4} tareas más
-                </div>
-              )}
-            </div>
-          )}
-        </button>
 
         {/* Administrative info — lowest visual weight */}
         <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', marginTop: '20px' }}>
