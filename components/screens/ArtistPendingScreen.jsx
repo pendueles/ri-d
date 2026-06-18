@@ -52,9 +52,10 @@ function TaskRow({ task, onClick }) {
 // Two KPI cards (Perfil / Catálogo) leading into the detailed task list for
 // whichever the person taps — mirrors the Perfil/Catálogo cards on the
 // artist home screen, just scoped to pending ("answered no") tasks.
-export default function ArtistPendingScreen({ artistAnswers, artistProjects, artistBlocks, songBlocks, onBack, onGoToProfileQuestion, onGoToProjectQuestion }) {
+export default function ArtistPendingScreen({ artistAnswers, artistProjects, artistBlocks, songBlocks, onBack, onGoToProfileQuestion, onGoToProjectQuestion, initialView = "overview" }) {
   const t = theme(isDark());
-  const [view, setView] = useState("overview"); // "overview" | "perfil" | "catalogo"
+  const [view, setView] = useState(initialView); // "overview" | "perfil" | "catalogo"
+  const skippedOverview = initialView !== "overview"; // came directly from Perfil/Catálogo card elsewhere in the app
 
   const profileTasks = getPendingTasks(artistBlocks, artistAnswers);
   const catalogueTasks = (artistProjects || []).flatMap(p =>
@@ -65,12 +66,13 @@ export default function ArtistPendingScreen({ artistAnswers, artistProjects, art
   const tasks = view === "perfil" ? profileTasks : view === "catalogo" ? catalogueTasks : [];
   const priorityRank = { Alta: 0, Media: 1, Baja: 2 };
   const sortedTasks = [...tasks].sort((a, b) => priorityRank[a.priority] - priorityRank[b.priority] || b.impact - a.impact);
+  const showOverviewButton = view !== "overview" && !skippedOverview;
 
   return (
     <div style={{ minHeight: "100dvh", background: "#ffffff", display: "flex", flexDirection: "column" }}>
       <div style={{ padding: "16px 20px", paddingTop: "max(16px,env(safe-area-inset-top,16px))", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: `1px solid ${t.border}` }}>
-        <button onClick={() => view === "overview" ? onBack() : setView("overview")} style={{ background: "transparent", border: "none", color: "#aaaaaa", fontFamily: "Arial,sans-serif", fontSize: "15px", cursor: "pointer", padding: 0 }}>
-          {view === "overview" ? "← Volver" : "← Tareas pendientes"}
+        <button onClick={() => showOverviewButton ? setView("overview") : onBack()} style={{ background: "transparent", border: "none", color: "#aaaaaa", fontFamily: "Arial,sans-serif", fontSize: "15px", cursor: "pointer", padding: 0 }}>
+          {showOverviewButton ? "← Tareas pendientes" : "← Volver"}
         </button>
         <div style={{ fontFamily: "Arial,sans-serif", fontSize: "15px", fontWeight: "700", color: "#0a0a0a" }}>{title}</div>
         <div style={{ width: "60px" }} />
