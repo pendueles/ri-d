@@ -57,9 +57,10 @@ export default function ArtistPendingScreen({ artistAnswers, artistProjects, art
   const [view, setView] = useState(initialView); // "overview" | "perfil" | "catalogo"
   const skippedOverview = initialView !== "overview"; // came directly from Perfil/Catálogo card elsewhere in the app
 
-  // When entering scoped to a single block (e.g. DSPs), only that block's
-  // questions count — the screen acts as a dedicated list, not the full profile.
-  const effectiveBlocks = blockFilter ? artistBlocks.filter(b => b.id === blockFilter.id) : artistBlocks;
+  // When entering scoped to a single block (e.g. DSPs) or a single
+  // subcategory within it (e.g. Spotify), use the passed-in object as-is —
+  // it may already be pre-filtered to just one subcat.
+  const effectiveBlocks = blockFilter ? [blockFilter] : artistBlocks;
   const profileTasks = getPendingTasks(effectiveBlocks, artistAnswers);
   const catalogueTasks = (artistProjects || []).flatMap(p =>
     getPendingTasks(songBlocks, p.answers || {}).map(t => ({ ...t, projectId: p.id, projectTitle: p.title }))
