@@ -3,7 +3,7 @@ import { useState } from "react";
 import { theme, isDark } from "../../theme/theme";
 import { calcBlockScore, calcTotalScore } from "../../utils/scoring";
 import { ARTIST_BLOCKS } from "../../data/questions";
-import { getPendingTasks } from "../../utils/helpers";
+import { getPendingTasks, BLOCK_ORDER, SUBCAT_ORDER } from "../../utils/helpers";
 
 function KpiCard({ label, value, onClick }) {
   const [hover, setHover] = useState(false);
@@ -78,7 +78,7 @@ export default function ArtistProfileScreen({ artistData, artistAnswers, onBack,
     { id: 'rights',    label: 'Rights' },
   ];
 
-  const pendingCount = getPendingTasks(ARTIST_BLOCKS, artistAnswers).length;
+  const pendingCount = getPendingTasks(ARTIST_BLOCKS, artistAnswers, BLOCK_ORDER, SUBCAT_ORDER.artist).length;
 
   return (
     <div style={{minHeight:'100dvh', background:'#ffffff', display:'flex', flexDirection:'column'}}>
