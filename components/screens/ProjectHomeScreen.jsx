@@ -3,7 +3,7 @@ import { useState } from "react";
 import { theme, isDark } from "../../theme/theme";
 import { calcBlockScore, calcTotalScore } from "../../utils/scoring";
 import { SONG_BLOCKS } from "../../data/questions";
-import { getPendingTasks } from "../../utils/helpers";
+import { getPendingTasks, BLOCK_ORDER, SUBCAT_ORDER } from "../../utils/helpers";
 
 function KpiCard({ label, value, onClick }) {
   const [hover, setHover] = useState(false);
@@ -84,7 +84,7 @@ export default function ProjectHomeScreen({ songData, songAnswers, onBlock, onRe
   })();
 
   // Pending tasks for the whole song
-  const pendingCount = getPendingTasks(SONG_BLOCKS, songAnswers).length;
+  const pendingCount = getPendingTasks(SONG_BLOCKS, songAnswers, BLOCK_ORDER, SUBCAT_ORDER.song).length;
 
   // Area KPI cards — DSPs, Social, Authority, Video, Rights, in that order
   const areaCards = [
