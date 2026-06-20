@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { theme, isDark } from "../../theme/theme";
 import { calcBlockScore } from "../../utils/scoring";
-import { getPendingTasks } from "../../utils/helpers";
+import { getPendingTasks, SUBCAT_ORDER } from "../../utils/helpers";
 
 function KpiCard({ label, value, onClick }) {
   const [hover, setHover] = useState(false);
@@ -119,22 +119,7 @@ export default function BlockHomeScreen({ block, artistAnswers, onSubcat, onBack
   };
 
   // KPI card order — independent from hexagon vertex angles, per mode
-  const getCardOrder = () => {
-    if (!isSong) {
-      if (block.id === 'dsps')      return ['spotify', 'apple', 'ytmusic', 'otherdsps', 'soundcloud'];
-      if (block.id === 'social')    return ['instagram', 'tiktok', 'x', 'rrss_alt', 'web'];
-      if (block.id === 'authority') return ['lyrics', 'wikipedia', 'googlepanel', 'musicbrainz', 'composer'];
-      if (block.id === 'ytvideo')   return ['accesos', 'configuracion', 'organizacion', 'diseno', 'contenido'];
-      if (block.id === 'rights')    return ['publishing', 'sgae', 'agedi', 'soundexchange', 'aie'];
-    } else {
-      if (block.id === 'dsps')      return ['spotify', 'apple_music', 'youtube_music', 'other_dsps', 'soundcloud', 'beatport'];
-      if (block.id === 'social')    return ['instagram', 'tiktok', 'x'];
-      if (block.id === 'authority') return ['lyrics', 'wikipedia', 'google_panel', 'musicbrainzco', 'composser', 'ooh'];
-      if (block.id === 'ytvideo')   return ['upload_assets', 'content_id__derivados', 'internal_connection', 'external_connection', 'otras_dvps', 'otras_integraciones'];
-      if (block.id === 'rights')    return ['sgae', 'soundexchange', 'aie', 'agedi', 'samples'];
-    }
-    return null;
-  };
+  const getCardOrder = () => SUBCAT_ORDER[isSong ? 'song' : 'artist'][block.id] || null;
 
   const vertices = getVertices();
   const S = 340, cx = S/2, cy = S/2, R = 120;
@@ -190,9 +175,9 @@ export default function BlockHomeScreen({ block, artistAnswers, onSubcat, onBack
     return pts.map((p,i) => `${i===0?'M':'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ') + ' Z';
   })();
 
-  const pendingCount = getPendingTasks([block], artistAnswers).length;
-
   const cardOrder = getCardOrder();
+  const pendingCount = getPendingTasks([block], artistAnswers, [block.id], { [block.id]: cardOrder }).length;
+
   const subcatCards = cardOrder
     ? cardOrder.map(id => vertices.find(v => v.id === id)).filter(Boolean)
     : vertices.filter(v => v.id !== 'result');
