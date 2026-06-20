@@ -41,11 +41,51 @@ function TaskRow({ task, onClick }) {
         {task.title}
       </div>
       <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-        <span style={{ fontFamily: "Arial,sans-serif", fontSize: "11px", color: "#aaaaaa" }}>{task.category}</span>
         <span style={{ fontFamily: "Arial,sans-serif", fontSize: "11px", fontWeight: "700", color: PRIORITY_COLOR[task.priority] }}>{task.priority} prioridad</span>
         <span style={{ fontFamily: "Arial,sans-serif", fontSize: "11px", fontWeight: "700", color: "#639922", marginLeft: "auto" }}>+{task.impact} pts</span>
       </div>
     </button>
+  );
+}
+
+// Re-groups an already block/subcat-sorted flat task list into
+// Area > Subcategory sections, for clear visual separation when rendering.
+function groupTasksByAreaAndSubcat(tasks) {
+  const groups = [];
+  tasks.forEach(task => {
+    let blockGroup = groups.find(g => g.blockId === task.blockId);
+    if (!blockGroup) { blockGroup = { blockId: task.blockId, label: task.category, subcats: [] }; groups.push(blockGroup); }
+    let subGroup = blockGroup.subcats.find(s => s.subcatId === task.subcatId);
+    if (!subGroup) { subGroup = { subcatId: task.subcatId, label: task.subcatLabel, tasks: [] }; blockGroup.subcats.push(subGroup); }
+    subGroup.tasks.push(task);
+  });
+  return groups;
+}
+
+function TaskSections({ tasks, onTaskClick, showAreaHeader = true }) {
+  const groups = groupTasksByAreaAndSubcat(tasks);
+  return (
+    <div>
+      {groups.map(block => (
+        <div key={block.blockId} style={{ marginBottom: "28px" }}>
+          {showAreaHeader && (
+            <div style={{ fontFamily: "Arial,sans-serif", fontSize: "18px", fontWeight: "700", color: "#0a0a0a", marginBottom: "12px" }}>
+              {block.label}
+            </div>
+          )}
+          {block.subcats.map(sub => (
+            <div key={sub.subcatId} style={{ marginBottom: "16px" }}>
+              <div style={{ fontFamily: "Arial,sans-serif", fontSize: "13px", fontWeight: "700", color: "#aaaaaa", letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: "4px" }}>
+                {sub.label}
+              </div>
+              {sub.tasks.map((task, i) => (
+                <TaskRow key={`${task.id}-${i}`} task={task} onClick={() => onTaskClick(task)} />
+              ))}
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -122,15 +162,7 @@ export default function ArtistPendingScreen({ artistAnswers, artistProjects, art
             <div style={{ fontFamily: "Arial,sans-serif", fontSize: "14px", color: "#aaaaaa" }}>No hay tareas pendientes en {title.toLowerCase()}</div>
           </div>
         ) : (
-          <div>
-            {sortedTasks.map((task, i) => (
-              <TaskRow
-                key={`${task.id}-${task.projectId || 'profile'}-${i}`}
-                task={task}
-                onClick={() => onGoToProfileQuestion(task.id)}
-              />
-            ))}
-          </div>
+          <TaskSections tasks={sortedTasks} onTaskClick={(task) => onGoToProfileQuestion(task.id)} showAreaHeader={!blockFilter} />
         )}
       </div>
     </div>
