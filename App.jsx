@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useDarkMode, theme } from "./theme";
-import { calcBlockScore, calcTotalScore, scoreColor, scoreLabel, bgColor } from "./utils";
+import { calcBlockScore, calcTotalScore, scoreColor, scoreLabel, bgColor, BLOCK_ORDER, SUBCAT_ORDER } from "./utils";
 import { ARTIST_BLOCKS, ARTIST_QUESTIONS, SONG_BLOCKS, SONG_QUESTIONS,
   RIMAS_LOGO, ICON_ARTISTA, ICON_PROYECTO } from "./data";
 import { HexRadarTotal, SplashScreen } from "./components/ui";
@@ -404,6 +404,8 @@ export default function App() {
         blocks={effectiveBlocks}
         answers={currentSong?.answers || {}}
         title={currentSong?.data?.title || "Proyecto"}
+        blockOrder={songPendingBlockFilter ? [songPendingBlockFilter.id] : BLOCK_ORDER}
+        subcatOrderMap={SUBCAT_ORDER.song}
         onBack={() => {
           const wasBlockFilter = !!songPendingBlockFilter;
           setSongPendingBlockFilter(null);
@@ -657,6 +659,20 @@ export default function App() {
           });
           setSongQIdx(0);
           setPhase("song-home");
+        }}
+        onOpenProjectQuestion={(p, task) => {
+          const qIdx = SONG_QUESTIONS.findIndex(q => q.id === task.id);
+          setCurrentSong({
+            data: { ...p, artistId: p.artistId || artistData?.id, linkedArtist: p.linkedArtist || { id: artistData?.id, name: artistData?.name } },
+            answers: p.answers || {}
+          });
+          setSongQIdx(qIdx !== -1 ? qIdx : 0);
+          let count = 0;
+          for (let i = 0; i < SONG_BLOCKS.length; i++) {
+            SONG_BLOCKS[i].subcats.forEach(s => { count += s.items.length; });
+            if ((qIdx !== -1 ? qIdx : 0) < count) { setCurrentBlockIdx(i); break; }
+          }
+          setPhase("song-questions");
         }}
       />
     );
