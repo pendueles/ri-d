@@ -1,7 +1,7 @@
 // components/screens/ArtistPendingScreen.jsx
 import { useState } from "react";
 import { theme, isDark } from "../../theme/theme";
-import { getPendingTasks } from "../../utils/helpers";
+import { getPendingTasks, BLOCK_ORDER, SUBCAT_ORDER } from "../../utils/helpers";
 
 const PRIORITY_COLOR = { Alta: "#E24B4A", Media: "#BA7517", Baja: "#378ADD" };
 
@@ -61,15 +61,19 @@ export default function ArtistPendingScreen({ artistAnswers, artistProjects, art
   // subcategory within it (e.g. Spotify), use the passed-in object as-is —
   // it may already be pre-filtered to just one subcat.
   const effectiveBlocks = blockFilter ? [blockFilter] : artistBlocks;
-  const profileTasks = getPendingTasks(effectiveBlocks, artistAnswers);
-  const catalogueTasks = (artistProjects || []).flatMap(p =>
-    getPendingTasks(songBlocks, p.answers || {}).map(t => ({ ...t, projectId: p.id, projectTitle: p.title }))
-  );
+  const profileTasks = getPendingTasks(effectiveBlocks, artistAnswers, BLOCK_ORDER, SUBCAT_ORDER.artist);
+
+  // Catalogue tasks keep their natural song order (as the songs come in),
+  // and within each song are sorted Area → Subcategory → Points.
+  const catalogueTasksBySong = (artistProjects || []).map(p => ({
+    projectId: p.id,
+    projectTitle: p.title || "Sin título",
+    tasks: getPendingTasks(songBlocks, p.answers || {}, BLOCK_ORDER, SUBCAT_ORDER.song).map(t => ({ ...t, projectId: p.id, projectTitle: p.title })),
+  })).filter(group => group.tasks.length > 0);
+  const catalogueTasks = catalogueTasksBySong.flatMap(g => g.tasks);
 
   const title = blockFilter ? blockFilter.label : view === "perfil" ? "Perfil" : view === "catalogo" ? "Catálogo" : "Tareas pendientes";
-  const tasks = blockFilter ? profileTasks : view === "perfil" ? profileTasks : view === "catalogo" ? catalogueTasks : [];
-  const priorityRank = { Alta: 0, Media: 1, Baja: 2 };
-  const sortedTasks = [...tasks].sort((a, b) => priorityRank[a.priority] - priorityRank[b.priority] || b.impact - a.impact);
+  const sortedTasks = blockFilter ? profileTasks : view === "perfil" ? profileTasks : [];
   const showOverviewButton = !blockFilter && view !== "overview" && !skippedOverview;
 
   return (
@@ -88,6 +92,30 @@ export default function ArtistPendingScreen({ artistAnswers, artistProjects, art
             <KpiCard label="Perfil" value={profileTasks.length} onClick={() => setView("perfil")} />
             <KpiCard label="Catálogo" value={catalogueTasks.length} onClick={() => setView("catalogo")} />
           </div>
+        ) : view === "catalogo" && !blockFilter ? (
+          catalogueTasksBySong.length === 0 ? (
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "40vh", textAlign: "center" }}>
+              <div style={{ fontFamily: "Arial,sans-serif", fontSize: "18px", fontWeight: "700", color: "#0a0a0a", marginBottom: "6px" }}>Todo al día</div>
+              <div style={{ fontFamily: "Arial,sans-serif", fontSize: "14px", color: "#aaaaaa" }}>No hay tareas pendientes en el catálogo</div>
+            </div>
+          ) : (
+            <div>
+              {catalogueTasksBySong.map(group => (
+                <div key={group.projectId} style={{ marginBottom: "24px" }}>
+                  <div style={{ fontFamily: "Arial,sans-serif", fontSize: "13px", fontWeight: "700", color: "#0a0a0a", marginBottom: "4px" }}>
+                    {group.projectTitle}
+                  </div>
+                  {group.tasks.map((task, i) => (
+                    <TaskRow
+                      key={`${task.id}-${task.projectId}-${i}`}
+                      task={task}
+                      onClick={() => onGoToProjectQuestion(task)}
+                    />
+                  ))}
+                </div>
+              ))}
+            </div>
+          )
         ) : sortedTasks.length === 0 ? (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "40vh", textAlign: "center" }}>
             <div style={{ fontFamily: "Arial,sans-serif", fontSize: "18px", fontWeight: "700", color: "#0a0a0a", marginBottom: "6px" }}>Todo al día</div>
@@ -99,7 +127,7 @@ export default function ArtistPendingScreen({ artistAnswers, artistProjects, art
               <TaskRow
                 key={`${task.id}-${task.projectId || 'profile'}-${i}`}
                 task={task}
-                onClick={() => (blockFilter || view === "perfil") ? onGoToProfileQuestion(task.id) : onGoToProjectQuestion(task)}
+                onClick={() => onGoToProfileQuestion(task.id)}
               />
             ))}
           </div>
