@@ -4,7 +4,7 @@ import { theme, isDark } from "../../theme/theme";
 import { calcBlockScore, calcTotalScore } from "../../utils/scoring";
 import { ARTIST_BLOCKS, SONG_BLOCKS } from "../../data/questions";
 import { getArtists, useFirebaseStore } from "../../firebase/store";
-import { getPendingTasks } from "../../utils/helpers";
+import { getPendingTasks, BLOCK_ORDER, SUBCAT_ORDER } from "../../utils/helpers";
 
 function KpiCard({ label, value, onClick }) {
   const [hover, setHover] = useState(false);
@@ -98,12 +98,9 @@ export default function ArtistHomeScreen({ artistData, artistAnswers, onBlock, o
   })();
 
   // Pending tasks — combine artist questions + all project (song) questions
-  const artistTasks = getPendingTasks(ARTIST_BLOCKS, artistAnswers);
-  const projectTasks = artistProjects.flatMap(p => getPendingTasks(SONG_BLOCKS, p.answers || {}));
-  const priorityRank = { Alta: 0, Media: 1, Baja: 2 };
-  const pendingTasks = [...artistTasks, ...projectTasks].sort((a, b) =>
-    priorityRank[a.priority] - priorityRank[b.priority] || b.impact - a.impact
-  );
+  const artistTasks = getPendingTasks(ARTIST_BLOCKS, artistAnswers, BLOCK_ORDER, SUBCAT_ORDER.artist);
+  const projectTasks = artistProjects.flatMap(p => getPendingTasks(SONG_BLOCKS, p.answers || {}, BLOCK_ORDER, SUBCAT_ORDER.song));
+  const pendingTasks = [...artistTasks, ...projectTasks];
 
   return (
     <div style={{ minHeight: '100dvh', background: '#ffffff', display: 'flex', flexDirection: 'column' }}>
