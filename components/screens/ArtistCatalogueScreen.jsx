@@ -2,14 +2,16 @@
 import { useState } from "react";
 import { theme, isDark } from "../../theme/theme";
 import { calcBlockScore, calcTotalScore } from "../../utils/scoring";
+import { getPendingTasks, BLOCK_ORDER, SUBCAT_ORDER } from "../../utils/helpers";
 import { getArtists, useFirebaseStore, deleteProjectById } from "../../firebase/store";
 import { SONG_BLOCKS } from "../../data/questions";
 
-export default function ArtistCatalogueScreen({ artistData, profile, onBack, onNewProject, onOpenProject, liveArtists }) {
+export default function ArtistCatalogueScreen({ artistData, profile, onBack, onNewProject, onOpenProject, onOpenProjectQuestion, liveArtists }) {
   const t = theme(isDark());
   useFirebaseStore(); // re-render on Firebase changes
   const [editMode, setEditMode] = useState(false);
   const [selected, setSelected] = useState([]);
+  const [showPending, setShowPending] = useState(false);
 
   const allArtists = liveArtists || getArtists();
   // Always read fresh from store — artistData prop may be stale
@@ -57,6 +59,16 @@ export default function ArtistCatalogueScreen({ artistData, profile, onBack, onN
     return scores.length > 0 ? Math.round(scores.reduce((a,b)=>a+b,0)/scores.length*10)/10 : null;
   };
   const catAvg = getCatBlockScore('result');
+
+  // Pending tasks across the whole catalogue, grouped by song; within each
+  // song, ordered Area → Subcategory → Points (same hierarchy used everywhere).
+  const catalogueTasksBySong = linkedProjects.map(p => ({
+    projectId: p.id,
+    projectTitle: p.title || "Sin título",
+    project: p,
+    tasks: getPendingTasks(SONG_BLOCKS, p.answers || {}, BLOCK_ORDER, SUBCAT_ORDER.song),
+  })).filter(group => group.tasks.length > 0);
+  const totalCataloguePending = catalogueTasksBySong.reduce((acc, g) => acc + g.tasks.length, 0);
   const S = Math.min(window.innerWidth * 0.86, 360), cxh = S/2, cyh = S/2, R = S * 0.30;
   const hexPts = songVerts.map(v => ({x: cxh + R*Math.cos(rad(v.angle)), y: cyh + R*Math.sin(rad(v.angle))}));
   const catDataPoly = (() => {
@@ -135,42 +147,84 @@ export default function ArtistCatalogueScreen({ artistData, profile, onBack, onN
               );
             })}
           </div>
-          <div style={{fontFamily:'Arial,sans-serif', fontSize:'12px', color:t.text3, marginBottom:'12px'}}>{linkedProjects.filter(p=>p.answers&&Object.keys(p.answers).length>0).length} proyectos evaluados</div>
+          <div style={{fontFamily:'Arial,sans-serif', fontSize:'12px', color:t.text3, marginBottom:'16px'}}>{linkedProjects.filter(p=>p.answers&&Object.keys(p.answers).length>0).length} proyectos evaluados</div>
+
+          <button onClick={() => setShowPending(true)} style={{
+            display:'flex', alignItems:'center', justifyContent:'space-between', width:'100%', maxWidth:'360px',
+            background:'#ffffff', border:'1px solid #EAEAEA', borderRadius:'20px', padding:'18px 20px',
+            marginBottom:'16px', cursor:'pointer', boxShadow:'0 1px 3px rgba(0,0,0,0.04)',
+          }}>
+            <div style={{fontFamily:'Arial,sans-serif', fontSize:'15px', fontWeight:'700', color:'#0a0a0a'}}>Tareas pendientes</div>
+            <div style={{fontFamily:'Arial,sans-serif', fontSize:'26px', fontWeight:'700', color:'#0a0a0a'}}>{totalCataloguePending}</div>
+          </button>
         </div>
       )}
 
-      <div style={{flex:1, overflowY:'auto', WebkitOverflowScrolling:'touch', padding:'24px 20px', background:'#ffffff'}}>
-        {linkedProjects.length === 0 ? (
-          <div style={{display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:'50vh', textAlign:'center'}}>
-            <div style={{fontFamily:'Arial,sans-serif', fontSize:'48px', fontWeight:'700', color:t.border, marginBottom:'12px'}}>—</div>
-            <div style={{fontFamily:'Arial,sans-serif', fontSize:'20px', fontWeight:'700', color:'#0a0a0a', marginBottom:'8px'}}>Vacío</div>
-            <div style={{fontFamily:'Arial,sans-serif', fontSize:'14px', color:'#aaaaaa', marginBottom:'32px'}}>No hay proyectos asignados a {artistData.name}</div>
-            {isLabelOrAdmin && (
-              <button onClick={onNewProject} style={{padding:'16px 32px', background:t.accent, color:'#fff', border:'none', borderRadius:'14px', fontFamily:'Arial,sans-serif', fontSize:'16px', fontWeight:'700', cursor:'pointer'}}>
-                + Nuevo proyecto
-              </button>
-            )}
-          </div>
-        ) : (
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(220px, 1fr))", gap:"20px" }}>
-            {linkedProjects.map((p, i) => {
-              const liveScore = p.answers && Object.keys(p.answers).length > 0 ? Math.round(calcTotalScore(SONG_BLOCKS, p.answers) * 10) / 10 : null;
-              const isSelected = selected.includes(p.id);
-              return (
-                <ProjectKpiCard
-                  key={p.id || i}
-                  project={p}
-                  score={liveScore}
-                  color={kpiColor(liveScore)}
-                  editMode={editMode}
-                  isSelected={isSelected}
-                  onClick={() => editMode ? toggleSelect(p.id) : onOpenProject(p)}
-                />
-              );
-            })}
-          </div>
-        )}
-      </div>
+      {showPending ? (
+        <div style={{flex:1, overflowY:'auto', WebkitOverflowScrolling:'touch', padding:'24px 20px', background:'#ffffff'}}>
+          <button onClick={() => setShowPending(false)} style={{background:'transparent', border:'none', color:'#aaaaaa', fontFamily:'Arial,sans-serif', fontSize:'15px', cursor:'pointer', padding:0, marginBottom:'20px', display:'block'}}>
+            ← Catálogo
+          </button>
+          {catalogueTasksBySong.length === 0 ? (
+            <div style={{display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:'40vh', textAlign:'center'}}>
+              <div style={{fontFamily:'Arial,sans-serif', fontSize:'18px', fontWeight:'700', color:'#0a0a0a', marginBottom:'6px'}}>Todo al día</div>
+              <div style={{fontFamily:'Arial,sans-serif', fontSize:'14px', color:'#aaaaaa'}}>No hay tareas pendientes en el catálogo</div>
+            </div>
+          ) : (
+            catalogueTasksBySong.map(group => (
+              <div key={group.projectId} style={{marginBottom:'24px'}}>
+                <div style={{fontFamily:'Arial,sans-serif', fontSize:'16px', fontWeight:'700', color:'#0a0a0a', marginBottom:'8px'}}>
+                  {group.projectTitle}
+                </div>
+                {group.tasks.map((task, i) => (
+                  <button key={`${task.id}-${i}`}
+                    onClick={() => onOpenProjectQuestion ? onOpenProjectQuestion(group.project, task) : onOpenProject(group.project)}
+                    style={{display:'block', width:'100%', textAlign:'left', background:'transparent', border:'none', borderTop:'1px solid #F2F2F2', padding:'12px 0', cursor:'pointer'}}>
+                    <div style={{fontFamily:'Arial,sans-serif', fontSize:'14px', fontWeight:'700', color:'#0a0a0a', marginBottom:'4px'}}>{task.title}</div>
+                    <div style={{display:'flex', gap:'8px', alignItems:'center'}}>
+                      <span style={{fontFamily:'Arial,sans-serif', fontSize:'11px', color:'#aaaaaa'}}>{task.category} · {task.subcatLabel}</span>
+                      <span style={{fontFamily:'Arial,sans-serif', fontSize:'11px', fontWeight:'700', color:'#639922', marginLeft:'auto'}}>+{task.impact} pts</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            ))
+          )}
+        </div>
+      ) : (
+        <div style={{flex:1, overflowY:'auto', WebkitOverflowScrolling:'touch', padding:'24px 20px', background:'#ffffff'}}>
+          {linkedProjects.length === 0 ? (
+            <div style={{display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:'50vh', textAlign:'center'}}>
+              <div style={{fontFamily:'Arial,sans-serif', fontSize:'48px', fontWeight:'700', color:t.border, marginBottom:'12px'}}>—</div>
+              <div style={{fontFamily:'Arial,sans-serif', fontSize:'20px', fontWeight:'700', color:'#0a0a0a', marginBottom:'8px'}}>Vacío</div>
+              <div style={{fontFamily:'Arial,sans-serif', fontSize:'14px', color:'#aaaaaa', marginBottom:'32px'}}>No hay proyectos asignados a {artistData.name}</div>
+              {isLabelOrAdmin && (
+                <button onClick={onNewProject} style={{padding:'16px 32px', background:t.accent, color:'#fff', border:'none', borderRadius:'14px', fontFamily:'Arial,sans-serif', fontSize:'16px', fontWeight:'700', cursor:'pointer'}}>
+                  + Nuevo proyecto
+                </button>
+              )}
+            </div>
+          ) : (
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(220px, 1fr))", gap:"20px" }}>
+              {linkedProjects.map((p, i) => {
+                const liveScore = p.answers && Object.keys(p.answers).length > 0 ? Math.round(calcTotalScore(SONG_BLOCKS, p.answers) * 10) / 10 : null;
+                const isSelected = selected.includes(p.id);
+                return (
+                  <ProjectKpiCard
+                    key={p.id || i}
+                    project={p}
+                    score={liveScore}
+                    color={kpiColor(liveScore)}
+                    editMode={editMode}
+                    isSelected={isSelected}
+                    onClick={() => editMode ? toggleSelect(p.id) : onOpenProject(p)}
+                  />
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
